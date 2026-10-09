@@ -30,6 +30,8 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 - Parse 13F information tables into normalized holdings.
 - Support 13D/13G beneficial ownership extraction for ownership percentage, share count,
   disclosed price range, and purpose text.
+- Pull recent 13D/13G filings for tracked managers and persist them as activist or
+  beneficial-owner signals.
 - Run a filing-season workflow across all active managers.
 
 ### Signal Engine
@@ -93,6 +95,7 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 8. Grouped historical backtesting by signal, manager, ticker, and price-zone status.
 9. Watchlist persistence and operating alerts.
 10. Portfolio plan and decision journal.
+11. 13D/13G ingestion pipeline and beneficial ownership signal persistence.
 
 ## Definition Of Done
 

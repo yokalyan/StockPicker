@@ -10,6 +10,7 @@ from stockpicker.models import BeneficialOwnershipFiling, FilingType, Signal, Si
 PRICE_PATTERN = re.compile(r"\$\s*(\d+(?:\.\d+)?)")
 PCT_PATTERN = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 SHARES_PATTERN = re.compile(r"([\d,]+)\s+(?:shares|share)", re.I)
+ISSUER_STOP = r"(?= Trading Symbol| Ticker Symbol| Symbol| The Reporting| Item \d|$)"
 
 
 def parse_beneficial_ownership_filing(
@@ -24,6 +25,7 @@ def parse_beneficial_ownership_filing(
 ) -> BeneficialOwnershipFiling:
     text = _clean_text(raw_text)
     issuer_name = _extract_issuer_name(text)
+    ticker = ticker or _extract_ticker(text)
     ownership_pct = _extract_ownership_pct(text)
     shares_owned = _extract_shares_owned(text)
     price_low, price_high = _extract_price_range(text)
@@ -79,14 +81,26 @@ def _clean_text(raw_text: str) -> str:
 
 def _extract_issuer_name(text: str) -> str:
     candidates = [
-        r"Name of Issuer\)?\s*:?\s*([A-Z][A-Za-z0-9 .,&'-]+?)(?= The Reporting| Item \d|$)",
-        r"Item 1\.\s*Security and Issuer\s+([A-Z][A-Za-z0-9 .,&'-]+?)(?= The Reporting| Item \d|$)",
+        rf"Name of Issuer\)?\s*:?\s*([A-Z][A-Za-z0-9 .,&'-]+?){ISSUER_STOP}",
+        rf"Item 1\.\s*Security and Issuer\s+([A-Z][A-Za-z0-9 .,&'-]+?){ISSUER_STOP}",
     ]
     for pattern in candidates:
         match = re.search(pattern, text, flags=re.I)
         if match:
             return match.group(1).strip(" .")
     return "Unknown Issuer"
+
+
+def _extract_ticker(text: str) -> str | None:
+    candidates = [
+        r"(?:Trading Symbol|Ticker Symbol|Symbol)\s*:?\s*([A-Z][A-Z0-9.\-]{0,9})",
+        r"\(Ticker\s*:?\s*([A-Z][A-Z0-9.\-]{0,9})\)",
+    ]
+    for pattern in candidates:
+        match = re.search(pattern, text, flags=re.I)
+        if match:
+            return match.group(1).upper()
+    return None
 
 
 def _extract_ownership_pct(text: str) -> float | None:

@@ -7,6 +7,7 @@ from stockpicker.models import FilingType, SignalType
 def test_parse_beneficial_ownership_extracts_key_fields():
     raw = """
     Item 1. Security and Issuer Acme Corp
+    Trading Symbol: ACME
     The Reporting Person beneficially owns 1,250,000 shares, representing 7.4%
     of the outstanding common stock. Purchases were made at prices ranging
     from $14.20 to $15.80 per share.
@@ -25,6 +26,7 @@ def test_parse_beneficial_ownership_extracts_key_fields():
     )
 
     assert filing.issuer_name == "Acme Corp"
+    assert filing.ticker == "ACME"
     assert filing.ownership_pct == 7.4
     assert filing.shares_owned == 1_250_000
     assert filing.price_low == 14.20

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from stockpicker.models import (
+    BeneficialOwnershipFiling,
     DecisionJournalEntry,
     DecisionType,
     Filing,
@@ -369,6 +370,47 @@ class Database:
                 ],
             )
 
+    def add_signals(self, signals: Iterable[Signal]) -> int:
+        signals = list(signals)
+        with self.connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO signals (
+                    manager_id, ticker, issuer_name, signal_type, report_period, current_shares,
+                    prior_shares, share_change, pct_change, current_weight,
+                    prior_weight, metadata_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(manager_id, ticker, signal_type, report_period) DO UPDATE SET
+                    issuer_name=excluded.issuer_name,
+                    current_shares=excluded.current_shares,
+                    prior_shares=excluded.prior_shares,
+                    share_change=excluded.share_change,
+                    pct_change=excluded.pct_change,
+                    current_weight=excluded.current_weight,
+                    prior_weight=excluded.prior_weight,
+                    metadata_json=excluded.metadata_json
+                """,
+                [
+                    (
+                        item.manager_id,
+                        item.ticker,
+                        item.issuer_name,
+                        item.signal_type,
+                        item.report_period,
+                        item.current_shares,
+                        item.prior_shares,
+                        item.share_change,
+                        item.pct_change,
+                        item.current_weight,
+                        item.prior_weight,
+                        json.dumps(item.metadata, sort_keys=True),
+                    )
+                    for item in signals
+                ],
+            )
+        return len(signals)
+
     def signals(self, report_period: date | None = None) -> list[Signal]:
         query = "SELECT * FROM signals"
         params: tuple[Any, ...] = ()
@@ -532,6 +574,63 @@ class Database:
                     item.notes,
                 ),
             )
+
+    def upsert_beneficial_ownership_filing(self, filing: BeneficialOwnershipFiling) -> int:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO beneficial_ownership_filings(
+                    manager_id, accession_number, filing_type, filing_date, issuer_name,
+                    ticker, ownership_pct, shares_owned, price_low, price_high, purpose,
+                    document_url
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(accession_number) DO UPDATE SET
+                    manager_id=excluded.manager_id,
+                    filing_type=excluded.filing_type,
+                    filing_date=excluded.filing_date,
+                    issuer_name=excluded.issuer_name,
+                    ticker=excluded.ticker,
+                    ownership_pct=excluded.ownership_pct,
+                    shares_owned=excluded.shares_owned,
+                    price_low=excluded.price_low,
+                    price_high=excluded.price_high,
+                    purpose=excluded.purpose,
+                    document_url=excluded.document_url
+                """,
+                (
+                    filing.manager_id,
+                    filing.accession_number,
+                    filing.filing_type,
+                    filing.filing_date,
+                    filing.issuer_name,
+                    filing.ticker,
+                    filing.ownership_pct,
+                    filing.shares_owned,
+                    filing.price_low,
+                    filing.price_high,
+                    filing.purpose,
+                    filing.document_url,
+                ),
+            )
+            row = conn.execute(
+                "SELECT id FROM beneficial_ownership_filings WHERE accession_number = ?",
+                (filing.accession_number,),
+            ).fetchone()
+            return int(row["id"])
+
+    def beneficial_ownership_filings(
+        self, ticker: str | None = None
+    ) -> list[BeneficialOwnershipFiling]:
+        query = "SELECT * FROM beneficial_ownership_filings"
+        params: tuple[Any, ...] = ()
+        if ticker:
+            query += " WHERE ticker = ?"
+            params = (ticker.upper(),)
+        query += " ORDER BY filing_date DESC"
+        with self.connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+            return [self._beneficial_filing_from_row(row) for row in rows]
 
     def watchlist(self) -> list[WatchlistItem]:
         with self.connect() as conn:
@@ -716,4 +815,22 @@ class Database:
             price=row["price"],
             signal_id=row["signal_id"],
             created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
+        )
+
+    @staticmethod
+    def _beneficial_filing_from_row(row: sqlite3.Row) -> BeneficialOwnershipFiling:
+        return BeneficialOwnershipFiling(
+            id=row["id"],
+            manager_id=row["manager_id"],
+            accession_number=row["accession_number"],
+            filing_type=row["filing_type"],
+            filing_date=date.fromisoformat(row["filing_date"]),
+            issuer_name=row["issuer_name"],
+            ticker=row["ticker"],
+            ownership_pct=row["ownership_pct"],
+            shares_owned=row["shares_owned"],
+            price_low=row["price_low"],
+            price_high=row["price_high"],
+            purpose=row["purpose"],
+            document_url=row["document_url"],
         )

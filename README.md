@@ -50,6 +50,15 @@ SEC_USER_AGENT="Your Name your.email@example.com" \
   .venv/bin/stockpicker ingest-13f --cik "0000000000" --limit 4
 ```
 
+Ingest fresh 13D/13G filings:
+
+```bash
+SEC_USER_AGENT="Your Name your.email@example.com" \
+  .venv/bin/stockpicker ingest-beneficial --cik "0000000000" --limit 20
+
+.venv/bin/stockpicker beneficial-filings --ticker XYZ
+```
+
 Generate signals and view opportunities:
 
 ```bash
@@ -127,6 +136,7 @@ Record portfolio plans and decisions:
 - Phase 8: grouped historical backtesting by signal, manager, ticker, and price zone.
 - Phase 9: watchlist persistence and operating alerts.
 - Phase 10: portfolio plan and decision journal.
+- Phase 11: 13D/13G ingestion pipeline and beneficial ownership signal persistence.
 
 ## Design Principles
 

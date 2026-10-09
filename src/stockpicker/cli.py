@@ -24,6 +24,7 @@ from stockpicker.pipeline import (
     build_cost_estimates_for_signals,
     generate_manager_signals,
     ingest_13f_filings,
+    ingest_beneficial_ownership_filings,
     run_filing_season,
 )
 from stockpicker.research import render_research_packet
@@ -138,6 +139,54 @@ def ingest_13f(
         f"[green]Ingested {result.filing_count} filings and "
         f"{result.holding_count} holdings for {result.manager.name}.[/green]"
     )
+
+
+@app.command("ingest-beneficial")
+@click.option("--cik", required=True)
+@click.option("--user-agent", envvar="SEC_USER_AGENT", required=True)
+@click.option("--limit", default=20)
+@click.pass_context
+def ingest_beneficial(ctx: click.Context, cik: str, user_agent: str, limit: int) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    manager = db.manager_by_cik(cik)
+    if not manager:
+        raise click.ClickException(f"No manager found for CIK {cik}. Add it first.")
+    result = ingest_beneficial_ownership_filings(
+        db=db,
+        manager=manager,
+        sec_client=SecClient(user_agent),
+        limit=limit,
+    )
+    console.print(
+        f"[green]Ingested {result.filing_count} 13D/13G filings and "
+        f"{result.signal_count} signals for {result.manager.name}.[/green]"
+    )
+
+
+@app.command("beneficial-filings")
+@click.option("--ticker", default=None)
+@click.pass_context
+def beneficial_filings(ctx: click.Context, ticker: str | None) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    table = Table(title="Beneficial Ownership Filings")
+    for column in ["Date", "Ticker", "Issuer", "Type", "Ownership", "Price Range"]:
+        table.add_column(column)
+    for filing in db.beneficial_ownership_filings(ticker=ticker):
+        ownership = f"{filing.ownership_pct:.1f}%" if filing.ownership_pct is not None else ""
+        price_range = ""
+        if filing.price_low is not None and filing.price_high is not None:
+            price_range = f"${filing.price_low:.2f}-${filing.price_high:.2f}"
+        table.add_row(
+            filing.filing_date.isoformat(),
+            filing.ticker or "",
+            filing.issuer_name,
+            str(filing.filing_type),
+            ownership,
+            price_range,
+        )
+    console.print(table)
 
 
 @app.command("run-season")

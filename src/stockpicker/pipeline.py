@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
+from stockpicker.beneficial import beneficial_filing_to_signal, parse_beneficial_ownership_filing
 from stockpicker.db import Database
 from stockpicker.models import Filing, FilingType, Manager, Signal
 from stockpicker.prices import estimate_cost_basis, fetch_price_bars, quarter_window
@@ -10,6 +11,12 @@ from stockpicker.sec import SecClient, load_ticker_map, parse_13f_information_ta
 from stockpicker.signals import generate_position_signals
 
 TRACKED_13F_FORMS = {FilingType.FORM_13F.value, FilingType.FORM_13F_AMENDMENT.value}
+TRACKED_BENEFICIAL_FORMS = {
+    FilingType.SCHEDULE_13D.value,
+    FilingType.SCHEDULE_13D_AMENDMENT.value,
+    FilingType.SCHEDULE_13G.value,
+    FilingType.SCHEDULE_13G_AMENDMENT.value,
+}
 
 
 @dataclass(frozen=True)
@@ -17,6 +24,13 @@ class IngestResult:
     manager: Manager
     filing_count: int
     holding_count: int
+
+
+@dataclass(frozen=True)
+class BeneficialIngestResult:
+    manager: Manager
+    filing_count: int
+    signal_count: int
 
 
 @dataclass(frozen=True)
@@ -68,6 +82,42 @@ def ingest_13f_filings(
         holding_count += len(holdings)
 
     return IngestResult(manager=manager, filing_count=len(filings), holding_count=holding_count)
+
+
+def ingest_beneficial_ownership_filings(
+    *,
+    db: Database,
+    manager: Manager,
+    sec_client: SecClient,
+    limit: int = 20,
+) -> BeneficialIngestResult:
+    if manager.id is None:
+        raise ValueError("Manager must be saved before ingesting filings.")
+
+    filings = sec_client.recent_filings(
+        manager.cik,
+        forms=TRACKED_BENEFICIAL_FORMS,
+        limit=limit,
+    )
+    signals = []
+    for item in filings:
+        raw_text = sec_client.download_text(item["document_url"])
+        filing = parse_beneficial_ownership_filing(
+            raw_text,
+            manager_id=manager.id,
+            accession_number=item["accession_number"],
+            filing_type=item["filing_type"],
+            filing_date=item["filing_date"],
+            document_url=item["document_url"],
+        )
+        db.upsert_beneficial_ownership_filing(filing)
+        signals.append(beneficial_filing_to_signal(filing))
+    signal_count = db.add_signals(signals)
+    return BeneficialIngestResult(
+        manager=manager,
+        filing_count=len(filings),
+        signal_count=signal_count,
+    )
 
 
 def run_filing_season(

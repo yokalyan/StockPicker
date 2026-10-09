@@ -2,6 +2,7 @@ from datetime import date
 
 from stockpicker.db import Database
 from stockpicker.models import (
+    BeneficialOwnershipFiling,
     DecisionJournalEntry,
     DecisionType,
     Filing,
@@ -146,3 +147,30 @@ def test_database_persists_portfolio_and_decisions(tmp_path):
     assert decision_id > 0
     assert positions[0].thesis_status == ThesisStatus.ACTIVE
     assert decisions[0].decision_type == DecisionType.BUY
+
+
+def test_database_persists_beneficial_ownership_filings(tmp_path):
+    db = Database(tmp_path / "stockpicker.sqlite")
+    db.init()
+    manager_id = db.upsert_manager(Manager(name="Patient Capital", cik="12345"))
+    filing_id = db.upsert_beneficial_ownership_filing(
+        BeneficialOwnershipFiling(
+            manager_id=manager_id,
+            accession_number="beneficial",
+            filing_type="SC 13D",
+            filing_date=date(2026, 10, 9),
+            issuer_name="Acme Corp",
+            ticker="ACME",
+            ownership_pct=7.4,
+            shares_owned=1_250_000,
+            price_low=14.2,
+            price_high=15.8,
+            document_url="https://example.com/beneficial",
+        )
+    )
+
+    filings = db.beneficial_ownership_filings("ACME")
+
+    assert filing_id > 0
+    assert filings[0].ticker == "ACME"
+    assert filings[0].ownership_pct == 7.4

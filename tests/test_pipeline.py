@@ -2,7 +2,28 @@ from datetime import date
 
 from stockpicker.db import Database
 from stockpicker.models import Filing, Holding, Manager, StrategyType
-from stockpicker.pipeline import run_filing_season
+from stockpicker.pipeline import ingest_beneficial_ownership_filings, run_filing_season
+
+
+class FakeSecClient:
+    def recent_filings(self, cik, forms=None, limit=20):
+        return [
+            {
+                "accession_number": "beneficial",
+                "filing_type": "SC 13D",
+                "filing_date": date(2026, 10, 9),
+                "report_period": None,
+                "document_url": "https://example.com/beneficial",
+            }
+        ][:limit]
+
+    def download_text(self, url):
+        return """
+        Item 1. Security and Issuer Acme Corp Trading Symbol: ACME
+        The Reporting Person beneficially owns 1,250,000 shares, representing 7.4%
+        of the outstanding common stock. Purchases were made from $14.20 to $15.80.
+        Item 4. Purpose of Transaction Strategic alternatives. Item 5.
+        """
 
 
 def test_run_filing_season_generates_signals_without_ingest(tmp_path):
@@ -70,3 +91,22 @@ def test_run_filing_season_generates_signals_without_ingest(tmp_path):
 
     assert result.signal_count == 1
     assert result.manager_errors == {}
+
+
+def test_ingest_beneficial_ownership_filings_creates_filing_and_signal(tmp_path):
+    db = Database(tmp_path / "stockpicker.sqlite")
+    db.init()
+    db.upsert_manager(Manager(name="Patient Capital", cik="12345"))
+    manager = db.manager_by_cik("12345")
+    assert manager is not None
+
+    result = ingest_beneficial_ownership_filings(
+        db=db,
+        manager=manager,
+        sec_client=FakeSecClient(),
+    )
+
+    assert result.filing_count == 1
+    assert result.signal_count == 1
+    assert db.beneficial_ownership_filings("ACME")[0].ownership_pct == 7.4
+    assert db.signals()[0].ticker == "ACME"
