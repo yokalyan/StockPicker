@@ -37,6 +37,12 @@ Add a manager:
   --quality 8.5
 ```
 
+Or import a curated universe:
+
+```bash
+.venv/bin/stockpicker import-managers resources/manager_universe_template.csv
+```
+
 Ingest filings:
 
 ```bash
@@ -49,6 +55,13 @@ Generate signals and view opportunities:
 ```bash
 .venv/bin/stockpicker generate-signals
 .venv/bin/stockpicker opportunities --refresh-prices
+```
+
+Run the active manager universe end to end:
+
+```bash
+SEC_USER_AGENT="Your Name your.email@example.com" \
+  .venv/bin/stockpicker run-season --limit 4
 ```
 
 Generate a research packet:
@@ -73,6 +86,7 @@ Import a CUSIP-to-ticker map and export a dashboard:
 - Phase 4: 13D/13G beneficial ownership parser and activist signal conversion.
 - Phase 5: backtest primitives and requirements documentation.
 - Phase 6: security master mapping and static dashboard export.
+- Phase 7: manager universe import and filing-season run orchestration.
 
 ## Design Principles
 

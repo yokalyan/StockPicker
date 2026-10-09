@@ -1,0 +1,2 @@
+name,cik,strategy,quality_score,concentration_score,turnover_score,typical_holding_period_months,is_active,notes
+Example Concentrated Fund,0000000000,concentrated_fundamental,8.0,8.0,3.5,36,true,Replace with a manager you have vetted.

@@ -22,6 +22,7 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 - Store curated managers with CIKs, strategy labels, quality scores, concentration scores,
   turnover scores, and notes.
 - Allow managers to be excluded or de-emphasized through scoring.
+- Import manager universes from CSV and apply strategy-based default scoring.
 
 ### Filing Ingestion
 
@@ -29,6 +30,7 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 - Parse 13F information tables into normalized holdings.
 - Support 13D/13G beneficial ownership extraction for ownership percentage, share count,
   disclosed price range, and purpose text.
+- Run a filing-season workflow across all active managers.
 
 ### Signal Engine
 
@@ -78,6 +80,8 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 3. CLI workflow and research packets.
 4. 13D/13G beneficial ownership signals.
 5. Backtest primitives and requirements documentation.
+6. Security master mapping and dashboard export.
+7. Manager universe import and filing-season run orchestration.
 
 ## Definition Of Done
 

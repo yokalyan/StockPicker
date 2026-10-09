@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import date, datetime
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 
 from stockpicker.db import Database
 from stockpicker.models import Filing, FilingType, Manager, Signal
@@ -17,6 +17,14 @@ class IngestResult:
     manager: Manager
     filing_count: int
     holding_count: int
+
+
+@dataclass(frozen=True)
+class FilingSeasonResult:
+    ingested: list[IngestResult] = field(default_factory=list)
+    signal_count: int = 0
+    mapping_updates: int = 0
+    manager_errors: dict[str, str] = field(default_factory=dict)
 
 
 def ingest_13f_filings(
@@ -43,7 +51,7 @@ def ingest_13f_filings(
             report_period=item["report_period"],
             document_url=item["document_url"],
             raw_text=raw_text,
-            parsed_at=datetime.utcnow(),
+            parsed_at=datetime.now(UTC),
         )
         filing_id = db.upsert_filing(filing)
         if filing.report_period is None:
@@ -60,6 +68,46 @@ def ingest_13f_filings(
         holding_count += len(holdings)
 
     return IngestResult(manager=manager, filing_count=len(filings), holding_count=holding_count)
+
+
+def run_filing_season(
+    *,
+    db: Database,
+    managers: list[Manager],
+    sec_client: SecClient | None = None,
+    limit: int = 4,
+    ticker_map_path: str | None = None,
+    ingest: bool = True,
+) -> FilingSeasonResult:
+    results: list[IngestResult] = []
+    errors: dict[str, str] = {}
+    signal_count = 0
+
+    for manager in managers:
+        try:
+            if ingest:
+                if sec_client is None:
+                    raise ValueError("SEC client is required when ingestion is enabled.")
+                results.append(
+                    ingest_13f_filings(
+                        db=db,
+                        manager=manager,
+                        sec_client=sec_client,
+                        limit=limit,
+                        ticker_map_path=ticker_map_path,
+                    )
+                )
+            signal_count += len(generate_manager_signals(db, manager))
+        except Exception as exc:  # noqa: BLE001
+            errors[manager.name] = str(exc)
+
+    mapping_updates = db.apply_security_mappings()
+    return FilingSeasonResult(
+        ingested=results,
+        signal_count=signal_count,
+        mapping_updates=mapping_updates,
+        manager_errors=errors,
+    )
 
 
 def generate_manager_signals(db: Database, manager: Manager) -> list[Signal]:

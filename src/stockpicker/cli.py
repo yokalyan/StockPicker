@@ -8,12 +8,14 @@ from rich.table import Table
 
 from stockpicker.dashboard import render_dashboard
 from stockpicker.db import Database
+from stockpicker.manager_universe import load_manager_universe_csv
 from stockpicker.models import Manager, StrategyType
 from stockpicker.opportunities import rank_opportunities
 from stockpicker.pipeline import (
     build_cost_estimates_for_signals,
     generate_manager_signals,
     ingest_13f_filings,
+    run_filing_season,
 )
 from stockpicker.research import render_research_packet
 from stockpicker.sec import SecClient
@@ -90,6 +92,19 @@ def managers(ctx: click.Context) -> None:
     console.print(table)
 
 
+@app.command("import-managers")
+@click.argument("csv_path", type=click.Path(exists=True))
+@click.pass_context
+def import_managers(ctx: click.Context, csv_path: str) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    imported = 0
+    for manager in load_manager_universe_csv(csv_path):
+        db.upsert_manager(manager)
+        imported += 1
+    console.print(f"[green]Imported {imported} managers.[/green]")
+
+
 @app.command("ingest-13f")
 @click.option("--cik", required=True)
 @click.option("--user-agent", envvar="SEC_USER_AGENT", required=True)
@@ -114,6 +129,51 @@ def ingest_13f(
         f"[green]Ingested {result.filing_count} filings and "
         f"{result.holding_count} holdings for {result.manager.name}.[/green]"
     )
+
+
+@app.command("run-season")
+@click.option("--user-agent", envvar="SEC_USER_AGENT")
+@click.option("--limit", default=4)
+@click.option("--ticker-map", type=click.Path(exists=True), default=None)
+@click.option("--skip-ingest", is_flag=True, help="Generate signals from already-ingested filings.")
+@click.pass_context
+def run_season(
+    ctx: click.Context,
+    user_agent: str | None,
+    limit: int,
+    ticker_map: str | None,
+    skip_ingest: bool,
+) -> None:
+    db: Database = ctx.obj["db"]
+    active_managers = db.managers()
+    if not active_managers:
+        raise click.ClickException("No active managers found. Import or add managers first.")
+    if not skip_ingest and not user_agent:
+        raise click.ClickException("SEC_USER_AGENT is required unless --skip-ingest is used.")
+    sec_client = None if skip_ingest else SecClient(user_agent)
+    result = run_filing_season(
+        db=db,
+        managers=active_managers,
+        sec_client=sec_client,
+        limit=limit,
+        ticker_map_path=ticker_map,
+        ingest=not skip_ingest,
+    )
+    filing_count = sum(item.filing_count for item in result.ingested)
+    holding_count = sum(item.holding_count for item in result.ingested)
+    console.print(
+        "[green]Filing season run complete.[/green] "
+        f"Managers: {len(active_managers)} | Filings: {filing_count} | "
+        f"Holdings: {holding_count} | Signals: {result.signal_count} | "
+        f"Mapped holdings: {result.mapping_updates}"
+    )
+    if result.manager_errors:
+        error_table = Table(title="Manager Errors")
+        error_table.add_column("Manager")
+        error_table.add_column("Error")
+        for manager_name, error in result.manager_errors.items():
+            error_table.add_row(manager_name, error)
+        console.print(error_table)
 
 
 @app.command("generate-signals")
