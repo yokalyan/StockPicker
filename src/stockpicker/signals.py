@@ -87,6 +87,41 @@ def detect_multi_quarter_accumulation(
     return result
 
 
+def detect_multi_quarter_distribution(
+    signals_by_period: dict[date, list[Signal]], min_periods: int = 2
+) -> list[Signal]:
+    """Flag tickers that were trimmed or exited across multiple processed periods."""
+
+    trims_by_ticker: dict[str, list[Signal]] = defaultdict(list)
+    for period in sorted(signals_by_period):
+        for signal in signals_by_period[period]:
+            if signal.signal_type in {
+                SignalType.TRIM,
+                SignalType.LARGE_TRIM,
+                SignalType.EXIT,
+            }:
+                trims_by_ticker[signal.ticker].append(signal)
+
+    result: list[Signal] = []
+    for _ticker, trims in trims_by_ticker.items():
+        if len(trims) < min_periods:
+            continue
+        latest = trims[-1]
+        result.append(
+            latest.model_copy(
+                update={
+                    "signal_type": SignalType.MULTI_QUARTER_DISTRIBUTION,
+                    "metadata": {
+                        **latest.metadata,
+                        "distribution_periods": len(trims),
+                        "source_signal_ids": [item.id for item in trims if item.id],
+                    },
+                }
+            )
+        )
+    return result
+
+
 def _holding_key(holding: Holding) -> str:
     return (holding.ticker or holding.cusip or holding.issuer_name).upper()
 

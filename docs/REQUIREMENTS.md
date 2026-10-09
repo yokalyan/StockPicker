@@ -37,7 +37,8 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 ### Signal Engine
 
 - Detect new positions, adds, large adds, trims, large trims, exits, top-position changes,
-  activist filings, and beneficial-owner filings.
+  multi-quarter accumulation, multi-quarter distribution, activist filings, and
+  beneficial-owner filings.
 - Store signals with enough source metadata to audit why they were created.
 
 ### Cost Basis
@@ -50,6 +51,7 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 
 - Rank opportunities by manager quality, signal type, position weight, price status, and
   number of tracked managers involved.
+- Include explicit crowding/overlap metadata in opportunity scoring.
 - Rank “worth researching,” not “worth buying.”
 
 ### Research Workflow

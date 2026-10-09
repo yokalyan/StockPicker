@@ -15,6 +15,7 @@ small and mid-cap ideas worth underwriting.
 - Detects new positions, adds, trims, exits, and top-position changes.
 - Estimates cost-basis ranges from quarterly price and volume data.
 - Ranks opportunities by manager quality, signal strength, and price discipline.
+- Adds explicit crowding/overlap metadata to opportunity scoring.
 - Generates Markdown research packets with underwriting questions and a decision log.
 - Includes lightweight forward-return backtest primitives.
 - Imports a CUSIP-to-ticker security master and exports a static HTML dashboard.
@@ -144,6 +145,7 @@ Record portfolio plans and decisions:
 - Phase 10: portfolio plan and decision journal.
 - Phase 11: 13D/13G ingestion pipeline and beneficial ownership signal persistence.
 - Phase 12: local web dashboard UI.
+- Phase 13: initial draft audit, crowding analysis, and richer research packets.
 
 ## Design Principles
 

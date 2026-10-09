@@ -50,3 +50,4 @@ def test_rank_opportunities_rewards_quality_signal_and_entry_price():
     assert opportunities[0].ticker == "AAA"
     assert opportunities[0].score > 30
     assert opportunities[0].price_status == WatchlistState.INSIDE_BUY_ZONE
+    assert opportunities[0].crowding_label == "single-sponsor"

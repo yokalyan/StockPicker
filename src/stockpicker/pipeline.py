@@ -8,7 +8,11 @@ from stockpicker.db import Database
 from stockpicker.models import Filing, FilingType, Manager, Signal
 from stockpicker.prices import estimate_cost_basis, fetch_price_bars, quarter_window
 from stockpicker.sec import SecClient, load_ticker_map, parse_13f_information_table
-from stockpicker.signals import generate_position_signals
+from stockpicker.signals import (
+    detect_multi_quarter_accumulation,
+    detect_multi_quarter_distribution,
+    generate_position_signals,
+)
 
 TRACKED_13F_FORMS = {FilingType.FORM_13F.value, FilingType.FORM_13F_AMENDMENT.value}
 TRACKED_BENEFICIAL_FORMS = {
@@ -169,6 +173,7 @@ def generate_manager_signals(db: Database, manager: Manager) -> list[Signal]:
         return []
 
     generated: list[Signal] = []
+    signals_by_period: dict[date, list[Signal]] = {}
     for prior_period, current_period in zip(periods, periods[1:], strict=False):
         prior = db.holdings_for_manager_period(manager.id, prior_period)
         current = db.holdings_for_manager_period(manager.id, current_period)
@@ -179,7 +184,14 @@ def generate_manager_signals(db: Database, manager: Manager) -> list[Signal]:
             prior_holdings=prior,
         )
         db.replace_signals(manager.id, current_period, signals)
+        signals_by_period[current_period] = signals
         generated.extend(signals)
+    multi_period = [
+        *detect_multi_quarter_accumulation(signals_by_period),
+        *detect_multi_quarter_distribution(signals_by_period),
+    ]
+    db.add_signals(multi_period)
+    generated.extend(multi_period)
     return generated
 
 

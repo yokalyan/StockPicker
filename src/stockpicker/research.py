@@ -23,6 +23,7 @@ def render_research_packet(
         f"- Opportunity score: {opportunity.score}",
         f"- Best signal: {opportunity.best_signal.value}",
         f"- Price status: {opportunity.price_status.value}",
+        f"- Crowding: {opportunity.crowding_label} ({opportunity.crowding_score:+.1f})",
         f"- Managers: {', '.join(opportunity.managers)}",
         "",
     ]
@@ -54,6 +55,25 @@ def render_research_packet(
 
     lines.extend(
         [
+            "",
+            "## Crowding And Ownership",
+            "",
+            f"- Crowding label: {opportunity.crowding_label}",
+            f"- Crowding score: {opportunity.crowding_score:+.1f}",
+            "- Peer holder overlap: review tracked manager list and recent adds/trims.",
+            "",
+            "## Company Snapshot To Fill",
+            "",
+            "- Business description:",
+            "- Market cap:",
+            "- Sector / industry:",
+            "- Key financials:",
+            "- Valuation snapshot:",
+            "- Recent earnings notes:",
+            "- Insider ownership / trading:",
+            "- Short interest:",
+            "- Liquidity / average daily volume:",
+            "- Primary risks:",
             "",
             "## Underwriting Questions",
             "",

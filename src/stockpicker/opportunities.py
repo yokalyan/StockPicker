@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 
+from stockpicker.crowding import crowding_snapshot
 from stockpicker.models import (
     CostBasisEstimate,
     Manager,
@@ -18,6 +19,7 @@ SIGNAL_WEIGHTS = {
     SignalType.TOP_POSITION: 14,
     SignalType.LARGE_ADD: 12,
     SignalType.MULTI_QUARTER_ACCUMULATION: 12,
+    SignalType.MULTI_QUARTER_DISTRIBUTION: -14,
     SignalType.BENEFICIAL_OWNER: 10,
     SignalType.ADD: 6,
     SignalType.TRIM: -6,
@@ -96,6 +98,17 @@ def rank_opportunities(
             score += min(len(set(manager_names)) * 4, 12)
             rationale.append(f"{len(set(manager_names))} tracked managers involved")
 
+        crowding = crowding_snapshot(
+            ticker=ticker,
+            signals=ticker_signals,
+            managers_by_id=managers_by_id,
+        )
+        score += crowding.score
+        rationale.append(
+            f"crowding: {crowding.label}; {crowding.adding_count} adding, "
+            f"{crowding.trimming_count} trimming, {crowding.holder_count} tracked holders"
+        )
+
         opportunities.append(
             Opportunity(
                 ticker=ticker,
@@ -107,6 +120,8 @@ def rank_opportunities(
                 best_signal=best_signal,
                 price_status=price_status,
                 rationale=rationale,
+                crowding_score=crowding.score,
+                crowding_label=crowding.label,
             )
         )
 

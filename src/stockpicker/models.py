@@ -40,6 +40,7 @@ class SignalType(StrEnum):
     EXIT = "exit"
     TOP_POSITION = "top_position"
     MULTI_QUARTER_ACCUMULATION = "multi_quarter_accumulation"
+    MULTI_QUARTER_DISTRIBUTION = "multi_quarter_distribution"
     BENEFICIAL_OWNER = "beneficial_owner"
     ACTIVIST = "activist"
 
@@ -182,6 +183,8 @@ class Opportunity(BaseModel):
     best_signal: SignalType
     price_status: WatchlistState
     rationale: list[str]
+    crowding_score: float = 0.0
+    crowding_label: str = "unknown"
 
 
 class BeneficialOwnershipFiling(BaseModel):

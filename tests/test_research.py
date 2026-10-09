@@ -33,5 +33,7 @@ def test_render_research_packet_contains_decision_scaffold():
     packet = render_research_packet(opportunity, [signal], [])
 
     assert "# AAA Research Packet" in packet
+    assert "## Crowding And Ownership" in packet
+    assert "## Company Snapshot To Fill" in packet
     assert "## Underwriting Questions" in packet
     assert "## Decision Log" in packet
