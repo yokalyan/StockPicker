@@ -93,6 +93,28 @@ Review operating alerts and persist the current research queue:
 .venv/bin/stockpicker watchlist
 ```
 
+Record portfolio plans and decisions:
+
+```bash
+.venv/bin/stockpicker position \
+  --ticker XYZ \
+  --status active \
+  --target-weight 0.05 \
+  --entry-price 25.40 \
+  --add-below 22 \
+  --trim-above 40 \
+  --exit-condition "Thesis breaks"
+
+.venv/bin/stockpicker decision \
+  --ticker XYZ \
+  --type buy \
+  --price 25.40 \
+  --rationale "Inside buy zone and underwriting complete"
+
+.venv/bin/stockpicker portfolio
+.venv/bin/stockpicker decisions --ticker XYZ
+```
+
 ## Current Build Phases
 
 - Phase 1: project scaffold, SQLite schema, SEC client, 13F parser.
@@ -104,6 +126,7 @@ Review operating alerts and persist the current research queue:
 - Phase 7: manager universe import and filing-season run orchestration.
 - Phase 8: grouped historical backtesting by signal, manager, ticker, and price zone.
 - Phase 9: watchlist persistence and operating alerts.
+- Phase 10: portfolio plan and decision journal.
 
 ## Design Principles
 

@@ -62,6 +62,25 @@ class AlertType(StrEnum):
     NEW_SIGNAL = "new_signal"
 
 
+class ThesisStatus(StrEnum):
+    WATCHING = "watching"
+    UNDERWRITING = "underwriting"
+    ACTIVE = "active"
+    BROKEN = "broken"
+    CLOSED = "closed"
+
+
+class DecisionType(StrEnum):
+    WATCH = "watch"
+    RESEARCH = "research"
+    BUY = "buy"
+    ADD = "add"
+    TRIM = "trim"
+    SELL = "sell"
+    REJECT = "reject"
+    HOLD = "hold"
+
+
 class Manager(BaseModel):
     id: int | None = None
     name: str
@@ -198,3 +217,27 @@ class Alert(BaseModel):
     prior_state: WatchlistState | None = None
     new_state: WatchlistState | None = None
     severity: int = Field(default=2, ge=1, le=3)
+
+
+class PortfolioPosition(BaseModel):
+    ticker: str
+    issuer_name: str | None = None
+    thesis_status: ThesisStatus = ThesisStatus.WATCHING
+    target_weight: float | None = None
+    entry_price: float | None = None
+    add_below: float | None = None
+    trim_above: float | None = None
+    exit_condition: str = ""
+    thesis: str = ""
+    updated_at: datetime | None = None
+
+
+class DecisionJournalEntry(BaseModel):
+    id: int | None = None
+    ticker: str
+    decision_type: DecisionType
+    decision_date: date
+    rationale: str
+    price: float | None = None
+    signal_id: int | None = None
+    created_at: datetime | None = None

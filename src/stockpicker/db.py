@@ -9,12 +9,16 @@ from pathlib import Path
 from typing import Any
 
 from stockpicker.models import (
+    DecisionJournalEntry,
+    DecisionType,
     Filing,
     Holding,
     Manager,
+    PortfolioPosition,
     PriceBar,
     SecurityMapping,
     Signal,
+    ThesisStatus,
     WatchlistItem,
     WatchlistState,
 )
@@ -160,6 +164,30 @@ class Database:
                     opportunity_score REAL,
                     notes TEXT NOT NULL DEFAULT '',
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS portfolio_positions (
+                    ticker TEXT PRIMARY KEY,
+                    issuer_name TEXT,
+                    thesis_status TEXT NOT NULL,
+                    target_weight REAL,
+                    entry_price REAL,
+                    add_below REAL,
+                    trim_above REAL,
+                    exit_condition TEXT NOT NULL DEFAULT '',
+                    thesis TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS decision_journal (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticker TEXT NOT NULL,
+                    decision_type TEXT NOT NULL,
+                    decision_date TEXT NOT NULL,
+                    rationale TEXT NOT NULL,
+                    price REAL,
+                    signal_id INTEGER,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
 
                 INSERT OR IGNORE INTO schema_meta(version, applied_at)
@@ -515,6 +543,77 @@ class Database:
     def watchlist_by_ticker(self) -> dict[str, WatchlistItem]:
         return {item.ticker: item for item in self.watchlist()}
 
+    def upsert_portfolio_position(self, position: PortfolioPosition) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO portfolio_positions(
+                    ticker, issuer_name, thesis_status, target_weight, entry_price,
+                    add_below, trim_above, exit_condition, thesis, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(ticker) DO UPDATE SET
+                    issuer_name=COALESCE(excluded.issuer_name, portfolio_positions.issuer_name),
+                    thesis_status=excluded.thesis_status,
+                    target_weight=excluded.target_weight,
+                    entry_price=excluded.entry_price,
+                    add_below=excluded.add_below,
+                    trim_above=excluded.trim_above,
+                    exit_condition=excluded.exit_condition,
+                    thesis=excluded.thesis,
+                    updated_at=datetime('now')
+                """,
+                (
+                    position.ticker.upper(),
+                    position.issuer_name,
+                    position.thesis_status,
+                    position.target_weight,
+                    position.entry_price,
+                    position.add_below,
+                    position.trim_above,
+                    position.exit_condition,
+                    position.thesis,
+                ),
+            )
+
+    def portfolio_positions(self) -> list[PortfolioPosition]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM portfolio_positions ORDER BY ticker"
+            ).fetchall()
+            return [self._portfolio_position_from_row(row) for row in rows]
+
+    def add_decision(self, decision: DecisionJournalEntry) -> int:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO decision_journal(
+                    ticker, decision_type, decision_date, rationale, price, signal_id, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (
+                    decision.ticker.upper(),
+                    decision.decision_type,
+                    decision.decision_date,
+                    decision.rationale,
+                    decision.price,
+                    decision.signal_id,
+                ),
+            )
+            return int(cursor.lastrowid)
+
+    def decisions(self, ticker: str | None = None) -> list[DecisionJournalEntry]:
+        query = "SELECT * FROM decision_journal"
+        params: tuple[Any, ...] = ()
+        if ticker:
+            query += " WHERE ticker = ?"
+            params = (ticker.upper(),)
+        query += " ORDER BY decision_date DESC, id DESC"
+        with self.connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+            return [self._decision_from_row(row) for row in rows]
+
     @staticmethod
     def _manager_from_row(row: sqlite3.Row) -> Manager:
         return Manager(
@@ -589,4 +688,32 @@ class Database:
             opportunity_score=row["opportunity_score"],
             notes=row["notes"],
             updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
+        )
+
+    @staticmethod
+    def _portfolio_position_from_row(row: sqlite3.Row) -> PortfolioPosition:
+        return PortfolioPosition(
+            ticker=row["ticker"],
+            issuer_name=row["issuer_name"],
+            thesis_status=ThesisStatus(row["thesis_status"]),
+            target_weight=row["target_weight"],
+            entry_price=row["entry_price"],
+            add_below=row["add_below"],
+            trim_above=row["trim_above"],
+            exit_condition=row["exit_condition"],
+            thesis=row["thesis"],
+            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
+        )
+
+    @staticmethod
+    def _decision_from_row(row: sqlite3.Row) -> DecisionJournalEntry:
+        return DecisionJournalEntry(
+            id=row["id"],
+            ticker=row["ticker"],
+            decision_type=DecisionType(row["decision_type"]),
+            decision_date=date.fromisoformat(row["decision_date"]),
+            rationale=row["rationale"],
+            price=row["price"],
+            signal_id=row["signal_id"],
+            created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else None,
         )

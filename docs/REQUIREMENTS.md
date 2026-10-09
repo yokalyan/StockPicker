@@ -61,6 +61,10 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 - Persist a watchlist of opportunities and their last known price-zone state.
 - Emit operating alerts when opportunities enter buy zones, fall below sponsor cost,
   or change price-zone status.
+- Persist portfolio plans with thesis status, target weight, add/trim levels, and exit
+  conditions.
+- Record decision journal entries for watch, research, buy, add, trim, sell, reject, and
+  hold actions.
 
 ### Validation
 
@@ -88,6 +92,7 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 7. Manager universe import and filing-season run orchestration.
 8. Grouped historical backtesting by signal, manager, ticker, and price-zone status.
 9. Watchlist persistence and operating alerts.
+10. Portfolio plan and decision journal.
 
 ## Definition Of Done
 

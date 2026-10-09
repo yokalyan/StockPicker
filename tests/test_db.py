@@ -2,12 +2,16 @@ from datetime import date
 
 from stockpicker.db import Database
 from stockpicker.models import (
+    DecisionJournalEntry,
+    DecisionType,
     Filing,
     Holding,
     Manager,
+    PortfolioPosition,
     PriceBar,
     SecurityMapping,
     StrategyType,
+    ThesisStatus,
     WatchlistItem,
     WatchlistState,
 )
@@ -108,3 +112,37 @@ def test_database_persists_watchlist_items(tmp_path):
 
     assert watchlist[0].ticker == "ACME"
     assert watchlist[0].last_price_status == WatchlistState.INSIDE_BUY_ZONE
+
+
+def test_database_persists_portfolio_and_decisions(tmp_path):
+    db = Database(tmp_path / "stockpicker.sqlite")
+    db.init()
+    db.upsert_portfolio_position(
+        PortfolioPosition(
+            ticker="ACME",
+            issuer_name="Acme Corp",
+            thesis_status=ThesisStatus.ACTIVE,
+            target_weight=0.05,
+            entry_price=12.5,
+            add_below=10,
+            trim_above=20,
+            exit_condition="Thesis breaks",
+            thesis="Mispriced small-cap compounder",
+        )
+    )
+    decision_id = db.add_decision(
+        DecisionJournalEntry(
+            ticker="ACME",
+            decision_type=DecisionType.BUY,
+            decision_date=date(2026, 10, 9),
+            rationale="Inside buy zone and thesis validated",
+            price=12.5,
+        )
+    )
+
+    positions = db.portfolio_positions()
+    decisions = db.decisions("ACME")
+
+    assert decision_id > 0
+    assert positions[0].thesis_status == ThesisStatus.ACTIVE
+    assert decisions[0].decision_type == DecisionType.BUY

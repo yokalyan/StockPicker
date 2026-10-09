@@ -11,7 +11,14 @@ from stockpicker.backtest import build_backtest_observations, summarize_observat
 from stockpicker.dashboard import render_dashboard
 from stockpicker.db import Database
 from stockpicker.manager_universe import load_manager_universe_csv
-from stockpicker.models import Manager, StrategyType
+from stockpicker.models import (
+    DecisionJournalEntry,
+    DecisionType,
+    Manager,
+    PortfolioPosition,
+    StrategyType,
+    ThesisStatus,
+)
 from stockpicker.opportunities import rank_opportunities
 from stockpicker.pipeline import (
     build_cost_estimates_for_signals,
@@ -258,6 +265,127 @@ def watchlist(ctx: click.Context) -> None:
             item.last_price_status.value if item.last_price_status else "",
             f"{item.opportunity_score:.1f}" if item.opportunity_score is not None else "",
             item.updated_at.isoformat(timespec="seconds") if item.updated_at else "",
+        )
+    console.print(table)
+
+
+@app.command("position")
+@click.option("--ticker", required=True)
+@click.option("--issuer-name", default=None)
+@click.option("--status", type=click.Choice([item.value for item in ThesisStatus]), required=True)
+@click.option("--target-weight", type=float, default=None)
+@click.option("--entry-price", type=float, default=None)
+@click.option("--add-below", type=float, default=None)
+@click.option("--trim-above", type=float, default=None)
+@click.option("--exit-condition", default="")
+@click.option("--thesis", default="")
+@click.pass_context
+def position(
+    ctx: click.Context,
+    ticker: str,
+    issuer_name: str | None,
+    status: str,
+    target_weight: float | None,
+    entry_price: float | None,
+    add_below: float | None,
+    trim_above: float | None,
+    exit_condition: str,
+    thesis: str,
+) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    db.upsert_portfolio_position(
+        PortfolioPosition(
+            ticker=ticker,
+            issuer_name=issuer_name,
+            thesis_status=ThesisStatus(status),
+            target_weight=target_weight,
+            entry_price=entry_price,
+            add_below=add_below,
+            trim_above=trim_above,
+            exit_condition=exit_condition,
+            thesis=thesis,
+        )
+    )
+    console.print(f"[green]Saved position plan for {ticker.upper()}.[/green]")
+
+
+@app.command("portfolio")
+@click.pass_context
+def portfolio(ctx: click.Context) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    table = Table(title="Portfolio Plans")
+    for column in ["Ticker", "Status", "Target", "Entry", "Add Below", "Trim Above", "Exit"]:
+        table.add_column(column)
+    for item in db.portfolio_positions():
+        table.add_row(
+            item.ticker,
+            item.thesis_status.value,
+            f"{item.target_weight:.1%}" if item.target_weight is not None else "",
+            f"${item.entry_price:.2f}" if item.entry_price is not None else "",
+            f"${item.add_below:.2f}" if item.add_below is not None else "",
+            f"${item.trim_above:.2f}" if item.trim_above is not None else "",
+            item.exit_condition,
+        )
+    console.print(table)
+
+
+@app.command("decision")
+@click.option("--ticker", required=True)
+@click.option(
+    "--type",
+    "decision_type",
+    type=click.Choice([item.value for item in DecisionType]),
+    required=True,
+)
+@click.option("--rationale", required=True)
+@click.option("--price", type=float, default=None)
+@click.option("--signal-id", type=int, default=None)
+@click.option("--date", "decision_date", type=click.DateTime(formats=["%Y-%m-%d"]), default=None)
+@click.pass_context
+def decision(
+    ctx: click.Context,
+    ticker: str,
+    decision_type: str,
+    rationale: str,
+    price: float | None,
+    signal_id: int | None,
+    decision_date,
+) -> None:
+    from datetime import date as date_type
+
+    db: Database = ctx.obj["db"]
+    db.init()
+    entry_id = db.add_decision(
+        DecisionJournalEntry(
+            ticker=ticker,
+            decision_type=DecisionType(decision_type),
+            decision_date=decision_date.date() if decision_date else date_type.today(),
+            rationale=rationale,
+            price=price,
+            signal_id=signal_id,
+        )
+    )
+    console.print(f"[green]Recorded decision {entry_id} for {ticker.upper()}.[/green]")
+
+
+@app.command("decisions")
+@click.option("--ticker", default=None)
+@click.pass_context
+def decisions(ctx: click.Context, ticker: str | None) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    table = Table(title="Decision Journal")
+    for column in ["Date", "Ticker", "Type", "Price", "Rationale"]:
+        table.add_column(column)
+    for item in db.decisions(ticker=ticker):
+        table.add_row(
+            item.decision_date.isoformat(),
+            item.ticker,
+            item.decision_type.value,
+            f"${item.price:.2f}" if item.price is not None else "",
+            item.rationale,
         )
     console.print(table)
 
