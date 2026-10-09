@@ -99,6 +99,13 @@ class Holding(BaseModel):
     portfolio_weight: float | None = None
 
 
+class SecurityMapping(BaseModel):
+    cusip: str
+    ticker: str
+    issuer_name: str | None = None
+    source: str = "manual"
+
+
 class Signal(BaseModel):
     id: int | None = None
     manager_id: int

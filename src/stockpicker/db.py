@@ -8,7 +8,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from stockpicker.models import Filing, Holding, Manager, PriceBar, Signal
+from stockpicker.models import Filing, Holding, Manager, PriceBar, SecurityMapping, Signal
 
 SCHEMA_VERSION = 1
 
@@ -133,6 +133,14 @@ class Database:
                     price_high REAL,
                     purpose TEXT,
                     document_url TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS security_mappings (
+                    cusip TEXT PRIMARY KEY,
+                    ticker TEXT NOT NULL,
+                    issuer_name TEXT,
+                    source TEXT NOT NULL DEFAULT 'manual',
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
 
                 INSERT OR IGNORE INTO schema_meta(version, applied_at)
@@ -362,6 +370,74 @@ class Database:
                 (ticker.upper(), start, end),
             ).fetchall()
             return [self._price_from_row(row) for row in rows]
+
+    def upsert_security_mappings(self, mappings: Iterable[SecurityMapping]) -> int:
+        mappings = list(mappings)
+        with self.connect() as conn:
+            conn.executemany(
+                """
+                INSERT INTO security_mappings(cusip, ticker, issuer_name, source, updated_at)
+                VALUES (?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(cusip) DO UPDATE SET
+                    ticker=excluded.ticker,
+                    issuer_name=COALESCE(excluded.issuer_name, security_mappings.issuer_name),
+                    source=excluded.source,
+                    updated_at=datetime('now')
+                """,
+                [
+                    (
+                        item.cusip.upper(),
+                        item.ticker.upper(),
+                        item.issuer_name,
+                        item.source,
+                    )
+                    for item in mappings
+                ],
+            )
+        return len(mappings)
+
+    def security_mapping_by_cusip(self) -> dict[str, SecurityMapping]:
+        with self.connect() as conn:
+            rows = conn.execute("SELECT * FROM security_mappings").fetchall()
+            return {
+                row["cusip"]: SecurityMapping(
+                    cusip=row["cusip"],
+                    ticker=row["ticker"],
+                    issuer_name=row["issuer_name"],
+                    source=row["source"],
+                )
+                for row in rows
+            }
+
+    def apply_security_mappings(self) -> int:
+        with self.connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE holdings
+                SET ticker = (
+                    SELECT security_mappings.ticker
+                    FROM security_mappings
+                    WHERE security_mappings.cusip = holdings.cusip
+                )
+                WHERE (ticker IS NULL OR ticker = '')
+                  AND cusip IN (SELECT cusip FROM security_mappings)
+                """
+            )
+            return cursor.rowcount
+
+    def unmapped_holdings(self, limit: int = 100) -> list[Holding]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM holdings
+                WHERE ticker IS NULL OR ticker = ''
+                ORDER BY market_value DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            return [self._holding_from_row(row) for row in rows]
 
     @staticmethod
     def _manager_from_row(row: sqlite3.Row) -> Manager:

@@ -17,6 +17,7 @@ small and mid-cap ideas worth underwriting.
 - Ranks opportunities by manager quality, signal strength, and price discipline.
 - Generates Markdown research packets with underwriting questions and a decision log.
 - Includes lightweight forward-return backtest primitives.
+- Imports a CUSIP-to-ticker security master and exports a static HTML dashboard.
 
 ## Quick Start
 
@@ -56,6 +57,14 @@ Generate a research packet:
 .venv/bin/stockpicker research-packet --ticker XYZ --out research
 ```
 
+Import a CUSIP-to-ticker map and export a dashboard:
+
+```bash
+.venv/bin/stockpicker import-security-map mappings.csv
+.venv/bin/stockpicker unmapped-holdings
+.venv/bin/stockpicker dashboard --out dashboard.html
+```
+
 ## Current Build Phases
 
 - Phase 1: project scaffold, SQLite schema, SEC client, 13F parser.
@@ -63,6 +72,7 @@ Generate a research packet:
 - Phase 3: CLI workflow and research-packet generation.
 - Phase 4: 13D/13G beneficial ownership parser and activist signal conversion.
 - Phase 5: backtest primitives and requirements documentation.
+- Phase 6: security master mapping and static dashboard export.
 
 ## Design Principles
 

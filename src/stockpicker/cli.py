@@ -6,6 +6,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from stockpicker.dashboard import render_dashboard
 from stockpicker.db import Database
 from stockpicker.models import Manager, StrategyType
 from stockpicker.opportunities import rank_opportunities
@@ -16,6 +17,7 @@ from stockpicker.pipeline import (
 )
 from stockpicker.research import render_research_packet
 from stockpicker.sec import SecClient
+from stockpicker.security_master import load_security_mappings_csv
 
 console = Console()
 
@@ -152,6 +154,66 @@ def opportunities(ctx: click.Context, refresh_prices: bool, limit: int) -> None:
             ", ".join(item.managers),
         )
     console.print(table)
+
+
+@app.command("import-security-map")
+@click.argument("csv_path", type=click.Path(exists=True))
+@click.pass_context
+def import_security_map(ctx: click.Context, csv_path: str) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    mappings = load_security_mappings_csv(csv_path)
+    imported = db.upsert_security_mappings(mappings)
+    applied = db.apply_security_mappings()
+    console.print(
+        f"[green]Imported {imported} security mappings and applied {applied} holdings.[/green]"
+    )
+
+
+@app.command("apply-security-map")
+@click.pass_context
+def apply_security_map(ctx: click.Context) -> None:
+    db: Database = ctx.obj["db"]
+    applied = db.apply_security_mappings()
+    console.print(f"[green]Applied mappings to {applied} holdings.[/green]")
+
+
+@app.command("unmapped-holdings")
+@click.option("--limit", default=50)
+@click.pass_context
+def unmapped_holdings(ctx: click.Context, limit: int) -> None:
+    db: Database = ctx.obj["db"]
+    table = Table(title="Unmapped Holdings")
+    for column in ["Issuer", "CUSIP", "Market Value", "Period"]:
+        table.add_column(column)
+    for holding in db.unmapped_holdings(limit=limit):
+        table.add_row(
+            holding.issuer_name,
+            holding.cusip or "",
+            f"${holding.market_value:,.0f}",
+            holding.report_period.isoformat(),
+        )
+    console.print(table)
+
+
+@app.command("dashboard")
+@click.option("--out", type=click.Path(), default="dashboard.html")
+@click.option("--refresh-prices", is_flag=True)
+@click.option("--limit", default=50)
+@click.pass_context
+def dashboard(ctx: click.Context, out: str, refresh_prices: bool, limit: int) -> None:
+    db: Database = ctx.obj["db"]
+    signals = db.signals()
+    estimates = build_cost_estimates_for_signals(
+        db=db, signals=signals, refresh_prices=refresh_prices
+    )
+    ranked = rank_opportunities(
+        signals=signals, managers=db.managers(), cost_estimates=estimates
+    )[:limit]
+    path = Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_dashboard(ranked))
+    console.print(f"[green]Wrote {path}[/green]")
 
 
 @app.command("research-packet")

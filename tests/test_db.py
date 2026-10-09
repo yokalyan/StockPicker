@@ -1,5 +1,7 @@
+from datetime import date
+
 from stockpicker.db import Database
-from stockpicker.models import Manager, StrategyType
+from stockpicker.models import Filing, Holding, Manager, SecurityMapping, StrategyType
 
 
 def test_database_initializes_and_upserts_manager(tmp_path):
@@ -19,3 +21,39 @@ def test_database_initializes_and_upserts_manager(tmp_path):
     managers = db.managers()
     assert managers[0].name == "Patient Capital"
     assert managers[0].cik == "0000012345"
+
+
+def test_database_applies_security_mappings(tmp_path):
+    db = Database(tmp_path / "stockpicker.sqlite")
+    db.init()
+    manager_id = db.upsert_manager(Manager(name="Patient Capital", cik="12345"))
+    filing_id = db.upsert_filing(
+        filing=Filing(
+            manager_id=manager_id,
+            accession_number="0000000000-26-000001",
+            filing_type="13F-HR",
+            filing_date=date(2026, 8, 14),
+            report_period=date(2026, 6, 30),
+            document_url="https://example.com",
+        )
+    )
+    db.replace_holdings(
+        filing_id,
+        [
+            Holding(
+                filing_id=filing_id,
+                manager_id=manager_id,
+                accession_number="0000000000-26-000001",
+                report_period=date(2026, 6, 30),
+                issuer_name="ACME CORP",
+                cusip="000000001",
+                shares=100,
+                market_value=1000,
+            )
+        ],
+    )
+
+    db.upsert_security_mappings([SecurityMapping(cusip="000000001", ticker="ACME")])
+    assert db.apply_security_mappings() == 1
+    holdings = db.holdings_for_manager_period(manager_id, date(2026, 6, 30))
+    assert holdings[0].ticker == "ACME"
