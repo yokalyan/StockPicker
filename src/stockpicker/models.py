@@ -149,3 +149,19 @@ class Opportunity(BaseModel):
     best_signal: SignalType
     price_status: WatchlistState
     rationale: list[str]
+
+
+class BeneficialOwnershipFiling(BaseModel):
+    id: int | None = None
+    manager_id: int
+    accession_number: str
+    filing_type: FilingType | str
+    filing_date: date
+    issuer_name: str
+    ticker: str | None = None
+    ownership_pct: float | None = None
+    shares_owned: float | None = None
+    price_low: float | None = None
+    price_high: float | None = None
+    purpose: str | None = None
+    document_url: str

@@ -11,6 +11,7 @@ small and mid-cap ideas worth underwriting.
 
 - Tracks a curated manager universe.
 - Parses 13F holdings.
+- Extracts basic 13D/13G beneficial ownership signals.
 - Detects new positions, adds, trims, exits, and top-position changes.
 - Estimates cost-basis ranges from quarterly price and volume data.
 - Ranks opportunities by manager quality, signal strength, and price discipline.
@@ -59,6 +60,7 @@ Generate a research packet:
 - Phase 1: project scaffold, SQLite schema, SEC client, 13F parser.
 - Phase 2: position-change signals, cost-basis estimation, opportunity scoring.
 - Phase 3: CLI workflow and research-packet generation.
+- Phase 4: 13D/13G beneficial ownership parser and activist signal conversion.
 
 ## Design Principles
 

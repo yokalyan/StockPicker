@@ -119,6 +119,22 @@ class Database:
                     PRIMARY KEY(ticker, trade_date)
                 );
 
+                CREATE TABLE IF NOT EXISTS beneficial_ownership_filings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    manager_id INTEGER NOT NULL REFERENCES managers(id),
+                    accession_number TEXT NOT NULL UNIQUE,
+                    filing_type TEXT NOT NULL,
+                    filing_date TEXT NOT NULL,
+                    issuer_name TEXT NOT NULL,
+                    ticker TEXT,
+                    ownership_pct REAL,
+                    shares_owned REAL,
+                    price_low REAL,
+                    price_high REAL,
+                    purpose TEXT,
+                    document_url TEXT NOT NULL
+                );
+
                 INSERT OR IGNORE INTO schema_meta(version, applied_at)
                 VALUES (1, datetime('now'));
                 """
