@@ -63,6 +63,7 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 
 - Provide lightweight forward-return summaries by signal type.
 - Preserve the ability to expand into manager-level and price-zone backtests.
+- Summarize historical results by signal type, manager, ticker, and price-zone status.
 
 ## Non-Goals For MVP
 
@@ -82,6 +83,7 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 5. Backtest primitives and requirements documentation.
 6. Security master mapping and dashboard export.
 7. Manager universe import and filing-season run orchestration.
+8. Grouped historical backtesting by signal, manager, ticker, and price-zone status.
 
 ## Definition Of Done
 

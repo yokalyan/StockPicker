@@ -1,7 +1,14 @@
 from datetime import date
 
 from stockpicker.db import Database
-from stockpicker.models import Filing, Holding, Manager, SecurityMapping, StrategyType
+from stockpicker.models import (
+    Filing,
+    Holding,
+    Manager,
+    PriceBar,
+    SecurityMapping,
+    StrategyType,
+)
 
 
 def test_database_initializes_and_upserts_manager(tmp_path):
@@ -57,3 +64,26 @@ def test_database_applies_security_mappings(tmp_path):
     assert db.apply_security_mappings() == 1
     holdings = db.holdings_for_manager_period(manager_id, date(2026, 6, 30))
     assert holdings[0].ticker == "ACME"
+
+
+def test_database_loads_all_prices_for_tickers(tmp_path):
+    db = Database(tmp_path / "stockpicker.sqlite")
+    db.init()
+    db.upsert_prices(
+        [
+            PriceBar(
+                ticker="ACME",
+                trade_date=date(2026, 1, 2),
+                open=10,
+                high=10,
+                low=10,
+                close=10,
+                volume=100,
+            )
+        ]
+    )
+
+    prices = db.all_prices_for_tickers(["ACME", "MISSING"])
+
+    assert len(prices["ACME"]) == 1
+    assert prices["MISSING"] == []

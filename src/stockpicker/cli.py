@@ -6,6 +6,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from stockpicker.backtest import build_backtest_observations, summarize_observations
 from stockpicker.dashboard import render_dashboard
 from stockpicker.db import Database
 from stockpicker.manager_universe import load_manager_universe_csv
@@ -274,6 +275,48 @@ def dashboard(ctx: click.Context, out: str, refresh_prices: bool, limit: int) ->
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render_dashboard(ranked))
     console.print(f"[green]Wrote {path}[/green]")
+
+
+@app.command("backtest")
+@click.option(
+    "--group-by",
+    type=click.Choice(["signal_type", "manager", "price_status", "ticker"]),
+    default="signal_type",
+)
+@click.option("--holding-days", default=180)
+@click.option("--refresh-prices", is_flag=True)
+@click.pass_context
+def backtest(
+    ctx: click.Context, group_by: str, holding_days: int, refresh_prices: bool
+) -> None:
+    db: Database = ctx.obj["db"]
+    signals = db.signals()
+    estimates = build_cost_estimates_for_signals(
+        db=db, signals=signals, refresh_prices=refresh_prices
+    )
+    prices_by_ticker = db.all_prices_for_tickers(signal.ticker for signal in signals)
+    observations = build_backtest_observations(
+        signals=signals,
+        managers=db.managers(),
+        prices_by_ticker=prices_by_ticker,
+        cost_estimates=estimates,
+        holding_days=holding_days,
+    )
+    summaries = summarize_observations(observations, group_by=group_by)
+    table = Table(title=f"Backtest by {group_by.replace('_', ' ')}")
+    for column in ["Group", "N", "Hit Rate", "Avg", "Median", "Best", "Worst"]:
+        table.add_column(column)
+    for item in summaries:
+        table.add_row(
+            item.group,
+            str(item.sample_size),
+            f"{item.hit_rate:.1%}",
+            f"{item.average_return:.1%}",
+            f"{item.median_return:.1%}",
+            f"{item.best_return:.1%}",
+            f"{item.worst_return:.1%}",
+        )
+    console.print(table)
 
 
 @app.command("research-packet")

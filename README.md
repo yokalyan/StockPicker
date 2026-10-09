@@ -78,6 +78,14 @@ Import a CUSIP-to-ticker map and export a dashboard:
 .venv/bin/stockpicker dashboard --out dashboard.html
 ```
 
+Run validation backtests from stored signals and price history:
+
+```bash
+.venv/bin/stockpicker backtest --group-by signal_type --holding-days 180
+.venv/bin/stockpicker backtest --group-by manager --holding-days 365
+.venv/bin/stockpicker backtest --group-by price_status
+```
+
 ## Current Build Phases
 
 - Phase 1: project scaffold, SQLite schema, SEC client, 13F parser.
@@ -87,6 +95,7 @@ Import a CUSIP-to-ticker map and export a dashboard:
 - Phase 5: backtest primitives and requirements documentation.
 - Phase 6: security master mapping and static dashboard export.
 - Phase 7: manager universe import and filing-season run orchestration.
+- Phase 8: grouped historical backtesting by signal, manager, ticker, and price zone.
 
 ## Design Principles
 

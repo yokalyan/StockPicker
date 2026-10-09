@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from stockpicker.models import PriceBar, Signal, SignalType
+from stockpicker.models import (
+    CostBasisEstimate,
+    Manager,
+    PriceBar,
+    Signal,
+    SignalType,
+    WatchlistState,
+)
 
 
 @dataclass(frozen=True)
@@ -13,6 +20,29 @@ class BacktestResult:
     hit_rate: float
     average_return: float
     median_return: float
+
+
+@dataclass(frozen=True)
+class BacktestObservation:
+    ticker: str
+    manager_name: str
+    manager_id: int
+    signal_type: SignalType
+    price_status: WatchlistState
+    signal_date: date
+    holding_days: int
+    forward_return: float
+
+
+@dataclass(frozen=True)
+class GroupedBacktestResult:
+    group: str
+    sample_size: int
+    hit_rate: float
+    average_return: float
+    median_return: float
+    best_return: float
+    worst_return: float
 
 
 def forward_return(
@@ -67,3 +97,86 @@ def summarize_forward_returns(
             )
         )
     return sorted(summaries, key=lambda item: item.average_return, reverse=True)
+
+
+def build_backtest_observations(
+    *,
+    signals: list[Signal],
+    managers: list[Manager],
+    prices_by_ticker: dict[str, list[PriceBar]],
+    cost_estimates: list[CostBasisEstimate] | None = None,
+    holding_days: int = 180,
+) -> list[BacktestObservation]:
+    managers_by_id = {manager.id: manager for manager in managers if manager.id is not None}
+    cost_by_key = {
+        (estimate.manager_id, estimate.ticker, estimate.report_period): estimate
+        for estimate in cost_estimates or []
+    }
+    observations: list[BacktestObservation] = []
+    for signal in signals:
+        result = forward_return(
+            prices=prices_by_ticker.get(signal.ticker, []),
+            signal_date=signal.report_period,
+            holding_days=holding_days,
+        )
+        if result is None:
+            continue
+        manager = managers_by_id.get(signal.manager_id)
+        estimate = cost_by_key.get((signal.manager_id, signal.ticker, signal.report_period))
+        observations.append(
+            BacktestObservation(
+                ticker=signal.ticker,
+                manager_name=manager.name if manager else f"Manager {signal.manager_id}",
+                manager_id=signal.manager_id,
+                signal_type=signal.signal_type,
+                price_status=estimate.status if estimate else WatchlistState.NEEDS_UNDERWRITING,
+                signal_date=signal.report_period,
+                holding_days=holding_days,
+                forward_return=result,
+            )
+        )
+    return observations
+
+
+def summarize_observations(
+    observations: list[BacktestObservation], group_by: str = "signal_type"
+) -> list[GroupedBacktestResult]:
+    grouped: dict[str, list[float]] = {}
+    for observation in observations:
+        group = _group_value(observation, group_by)
+        grouped.setdefault(group, []).append(observation.forward_return)
+
+    summaries = [
+        GroupedBacktestResult(
+            group=group,
+            sample_size=len(returns),
+            hit_rate=sum(item > 0 for item in returns) / len(returns),
+            average_return=sum(returns) / len(returns),
+            median_return=_median(returns),
+            best_return=max(returns),
+            worst_return=min(returns),
+        )
+        for group, returns in grouped.items()
+        if returns
+    ]
+    return sorted(summaries, key=lambda item: item.average_return, reverse=True)
+
+
+def _group_value(observation: BacktestObservation, group_by: str) -> str:
+    if group_by == "manager":
+        return observation.manager_name
+    if group_by == "price_status":
+        return observation.price_status.value
+    if group_by == "ticker":
+        return observation.ticker
+    if group_by == "signal_type":
+        return observation.signal_type.value
+    raise ValueError(f"Unsupported backtest group: {group_by}")
+
+
+def _median(values: list[float]) -> float:
+    sorted_values = sorted(values)
+    midpoint = len(sorted_values) // 2
+    if len(sorted_values) % 2:
+        return sorted_values[midpoint]
+    return (sorted_values[midpoint - 1] + sorted_values[midpoint]) / 2

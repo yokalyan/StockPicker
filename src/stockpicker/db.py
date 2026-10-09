@@ -371,6 +371,26 @@ class Database:
             ).fetchall()
             return [self._price_from_row(row) for row in rows]
 
+    def all_prices_for_tickers(self, tickers: Iterable[str]) -> dict[str, list[PriceBar]]:
+        tickers = sorted({ticker.upper() for ticker in tickers})
+        if not tickers:
+            return {}
+        placeholders = ",".join("?" for _ in tickers)
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT * FROM prices
+                WHERE ticker IN ({placeholders})
+                ORDER BY ticker, trade_date
+                """,
+                tickers,
+            ).fetchall()
+        result: dict[str, list[PriceBar]] = {ticker: [] for ticker in tickers}
+        for row in rows:
+            bar = self._price_from_row(row)
+            result.setdefault(bar.ticker, []).append(bar)
+        return result
+
     def upsert_security_mappings(self, mappings: Iterable[SecurityMapping]) -> int:
         mappings = list(mappings)
         with self.connect() as conn:
