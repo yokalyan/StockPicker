@@ -1,0 +1,113 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, datetime
+
+from stockpicker.db import Database
+from stockpicker.models import Filing, FilingType, Manager, Signal
+from stockpicker.prices import estimate_cost_basis, fetch_price_bars, quarter_window
+from stockpicker.sec import SecClient, load_ticker_map, parse_13f_information_table
+from stockpicker.signals import generate_position_signals
+
+TRACKED_13F_FORMS = {FilingType.FORM_13F.value, FilingType.FORM_13F_AMENDMENT.value}
+
+
+@dataclass(frozen=True)
+class IngestResult:
+    manager: Manager
+    filing_count: int
+    holding_count: int
+
+
+def ingest_13f_filings(
+    *,
+    db: Database,
+    manager: Manager,
+    sec_client: SecClient,
+    limit: int = 4,
+    ticker_map_path: str | None = None,
+) -> IngestResult:
+    if manager.id is None:
+        raise ValueError("Manager must be saved before ingesting filings.")
+
+    ticker_map = load_ticker_map(ticker_map_path)
+    filings = sec_client.recent_filings(manager.cik, forms=TRACKED_13F_FORMS, limit=limit)
+    holding_count = 0
+    for item in filings:
+        raw_text = sec_client.download_text(item["document_url"])
+        filing = Filing(
+            manager_id=manager.id,
+            accession_number=item["accession_number"],
+            filing_type=item["filing_type"],
+            filing_date=item["filing_date"],
+            report_period=item["report_period"],
+            document_url=item["document_url"],
+            raw_text=raw_text,
+            parsed_at=datetime.utcnow(),
+        )
+        filing_id = db.upsert_filing(filing)
+        if filing.report_period is None:
+            continue
+        holdings = parse_13f_information_table(
+            raw_text,
+            filing_id=filing_id,
+            manager_id=manager.id,
+            accession_number=filing.accession_number,
+            report_period=filing.report_period,
+            ticker_map=ticker_map,
+        )
+        db.replace_holdings(filing_id, holdings)
+        holding_count += len(holdings)
+
+    return IngestResult(manager=manager, filing_count=len(filings), holding_count=holding_count)
+
+
+def generate_manager_signals(db: Database, manager: Manager) -> list[Signal]:
+    if manager.id is None:
+        raise ValueError("Manager must be saved before generating signals.")
+
+    periods = db.periods_for_manager(manager.id)
+    if len(periods) < 2:
+        return []
+
+    generated: list[Signal] = []
+    for prior_period, current_period in zip(periods, periods[1:], strict=False):
+        prior = db.holdings_for_manager_period(manager.id, prior_period)
+        current = db.holdings_for_manager_period(manager.id, current_period)
+        signals = generate_position_signals(
+            manager_id=manager.id,
+            report_period=current_period,
+            current_holdings=current,
+            prior_holdings=prior,
+        )
+        db.replace_signals(manager.id, current_period, signals)
+        generated.extend(signals)
+    return generated
+
+
+def build_cost_estimates_for_signals(
+    *,
+    db: Database,
+    signals: list[Signal],
+    refresh_prices: bool = False,
+) -> list:
+    estimates = []
+    for signal in signals:
+        start, end = quarter_window(signal.report_period)
+        bars = db.prices(signal.ticker, start, end)
+        if refresh_prices and not bars:
+            bars = fetch_price_bars(signal.ticker, start, date.today())
+            db.upsert_prices(bars)
+            bars = [bar for bar in bars if start <= bar.trade_date <= end]
+        latest_bars = db.prices(signal.ticker, start, date.today())
+        current_price = latest_bars[-1].close if latest_bars else None
+        estimate = estimate_cost_basis(
+            ticker=signal.ticker,
+            manager_id=signal.manager_id,
+            report_period=signal.report_period,
+            quarter_bars=bars,
+            current_price=current_price,
+        )
+        if estimate:
+            estimates.append(estimate)
+    return estimates
