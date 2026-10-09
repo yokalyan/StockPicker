@@ -58,6 +58,9 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
   - Cost-basis context.
   - Underwriting questions.
   - Decision log.
+- Persist a watchlist of opportunities and their last known price-zone state.
+- Emit operating alerts when opportunities enter buy zones, fall below sponsor cost,
+  or change price-zone status.
 
 ### Validation
 
@@ -84,6 +87,7 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 6. Security master mapping and dashboard export.
 7. Manager universe import and filing-season run orchestration.
 8. Grouped historical backtesting by signal, manager, ticker, and price-zone status.
+9. Watchlist persistence and operating alerts.
 
 ## Definition Of Done
 

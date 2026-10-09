@@ -55,6 +55,13 @@ class WatchlistState(StrEnum):
     MONITOR_ONLY = "monitor_only"
 
 
+class AlertType(StrEnum):
+    PRICE_ZONE_CHANGED = "price_zone_changed"
+    ENTERED_BUY_ZONE = "entered_buy_zone"
+    BELOW_SPONSOR_COST = "below_sponsor_cost"
+    NEW_SIGNAL = "new_signal"
+
+
 class Manager(BaseModel):
     id: int | None = None
     name: str
@@ -172,3 +179,22 @@ class BeneficialOwnershipFiling(BaseModel):
     price_high: float | None = None
     purpose: str | None = None
     document_url: str
+
+
+class WatchlistItem(BaseModel):
+    ticker: str
+    issuer_name: str | None = None
+    state: WatchlistState = WatchlistState.NEEDS_UNDERWRITING
+    last_price_status: WatchlistState | None = None
+    opportunity_score: float | None = None
+    notes: str = ""
+    updated_at: datetime | None = None
+
+
+class Alert(BaseModel):
+    alert_type: AlertType
+    ticker: str
+    message: str
+    prior_state: WatchlistState | None = None
+    new_state: WatchlistState | None = None
+    severity: int = Field(default=2, ge=1, le=3)

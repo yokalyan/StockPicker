@@ -8,6 +8,8 @@ from stockpicker.models import (
     PriceBar,
     SecurityMapping,
     StrategyType,
+    WatchlistItem,
+    WatchlistState,
 )
 
 
@@ -87,3 +89,22 @@ def test_database_loads_all_prices_for_tickers(tmp_path):
 
     assert len(prices["ACME"]) == 1
     assert prices["MISSING"] == []
+
+
+def test_database_persists_watchlist_items(tmp_path):
+    db = Database(tmp_path / "stockpicker.sqlite")
+    db.init()
+    db.upsert_watchlist_item(
+        WatchlistItem(
+            ticker="ACME",
+            issuer_name="Acme Corp",
+            state=WatchlistState.NEEDS_UNDERWRITING,
+            last_price_status=WatchlistState.INSIDE_BUY_ZONE,
+            opportunity_score=42,
+        )
+    )
+
+    watchlist = db.watchlist()
+
+    assert watchlist[0].ticker == "ACME"
+    assert watchlist[0].last_price_status == WatchlistState.INSIDE_BUY_ZONE

@@ -6,6 +6,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from stockpicker.alerts import alerts_from_opportunities, watchlist_items_from_opportunities
 from stockpicker.backtest import build_backtest_observations, summarize_observations
 from stockpicker.dashboard import render_dashboard
 from stockpicker.db import Database
@@ -197,11 +198,7 @@ def generate_signals(ctx: click.Context, cik: str | None) -> None:
 @click.pass_context
 def opportunities(ctx: click.Context, refresh_prices: bool, limit: int) -> None:
     db: Database = ctx.obj["db"]
-    signals = db.signals()
-    estimates = build_cost_estimates_for_signals(
-        db=db, signals=signals, refresh_prices=refresh_prices
-    )
-    ranked = rank_opportunities(signals=signals, managers=db.managers(), cost_estimates=estimates)
+    ranked = _ranked_opportunities(db, refresh_prices=refresh_prices)
     table = Table(title="Ranked Filing Opportunities")
     for column in ["Rank", "Ticker", "Score", "Signal", "Price", "Managers"]:
         table.add_column(column)
@@ -213,6 +210,54 @@ def opportunities(ctx: click.Context, refresh_prices: bool, limit: int) -> None:
             item.best_signal.value,
             item.price_status.value,
             ", ".join(item.managers),
+        )
+    console.print(table)
+
+
+@app.command("alerts")
+@click.option("--refresh-prices", is_flag=True)
+@click.option("--save-watchlist", is_flag=True)
+@click.option("--limit", default=50)
+@click.pass_context
+def alerts(
+    ctx: click.Context, refresh_prices: bool, save_watchlist: bool, limit: int
+) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    ranked = _ranked_opportunities(db, refresh_prices=refresh_prices)[:limit]
+    alerts = alerts_from_opportunities(ranked, db.watchlist_by_ticker())
+    table = Table(title="Operating Alerts")
+    for column in ["Severity", "Type", "Ticker", "Message"]:
+        table.add_column(column)
+    for alert in alerts:
+        table.add_row(
+            str(alert.severity),
+            alert.alert_type.value,
+            alert.ticker,
+            alert.message,
+        )
+    console.print(table)
+    if save_watchlist:
+        for item in watchlist_items_from_opportunities(ranked):
+            db.upsert_watchlist_item(item)
+        console.print(f"[green]Saved {len(ranked)} opportunities to watchlist.[/green]")
+
+
+@app.command("watchlist")
+@click.pass_context
+def watchlist(ctx: click.Context) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    table = Table(title="Watchlist")
+    for column in ["Ticker", "State", "Price Status", "Score", "Updated"]:
+        table.add_column(column)
+    for item in db.watchlist():
+        table.add_row(
+            item.ticker,
+            item.state.value,
+            item.last_price_status.value if item.last_price_status else "",
+            f"{item.opportunity_score:.1f}" if item.opportunity_score is not None else "",
+            item.updated_at.isoformat(timespec="seconds") if item.updated_at else "",
         )
     console.print(table)
 
@@ -264,13 +309,7 @@ def unmapped_holdings(ctx: click.Context, limit: int) -> None:
 @click.pass_context
 def dashboard(ctx: click.Context, out: str, refresh_prices: bool, limit: int) -> None:
     db: Database = ctx.obj["db"]
-    signals = db.signals()
-    estimates = build_cost_estimates_for_signals(
-        db=db, signals=signals, refresh_prices=refresh_prices
-    )
-    ranked = rank_opportunities(
-        signals=signals, managers=db.managers(), cost_estimates=estimates
-    )[:limit]
+    ranked = _ranked_opportunities(db, refresh_prices=refresh_prices)[:limit]
     path = Path(out)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render_dashboard(ranked))
@@ -336,6 +375,14 @@ def research_packet(ctx: click.Context, ticker: str, out: str) -> None:
     path = output_dir / f"{ticker.upper()}_research_packet.md"
     path.write_text(render_research_packet(opportunity, signals, estimates))
     console.print(f"[green]Wrote {path}[/green]")
+
+
+def _ranked_opportunities(db: Database, refresh_prices: bool = False):
+    signals = db.signals()
+    estimates = build_cost_estimates_for_signals(
+        db=db, signals=signals, refresh_prices=refresh_prices
+    )
+    return rank_opportunities(signals=signals, managers=db.managers(), cost_estimates=estimates)
 
 
 if __name__ == "__main__":

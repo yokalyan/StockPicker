@@ -8,7 +8,16 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
-from stockpicker.models import Filing, Holding, Manager, PriceBar, SecurityMapping, Signal
+from stockpicker.models import (
+    Filing,
+    Holding,
+    Manager,
+    PriceBar,
+    SecurityMapping,
+    Signal,
+    WatchlistItem,
+    WatchlistState,
+)
 
 SCHEMA_VERSION = 1
 
@@ -140,6 +149,16 @@ class Database:
                     ticker TEXT NOT NULL,
                     issuer_name TEXT,
                     source TEXT NOT NULL DEFAULT 'manual',
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS watchlist (
+                    ticker TEXT PRIMARY KEY,
+                    issuer_name TEXT,
+                    state TEXT NOT NULL,
+                    last_price_status TEXT,
+                    opportunity_score REAL,
+                    notes TEXT NOT NULL DEFAULT '',
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
 
@@ -459,6 +478,43 @@ class Database:
             ).fetchall()
             return [self._holding_from_row(row) for row in rows]
 
+    def upsert_watchlist_item(self, item: WatchlistItem) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO watchlist(
+                    ticker, issuer_name, state, last_price_status, opportunity_score,
+                    notes, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(ticker) DO UPDATE SET
+                    issuer_name=COALESCE(excluded.issuer_name, watchlist.issuer_name),
+                    state=excluded.state,
+                    last_price_status=excluded.last_price_status,
+                    opportunity_score=excluded.opportunity_score,
+                    notes=excluded.notes,
+                    updated_at=datetime('now')
+                """,
+                (
+                    item.ticker.upper(),
+                    item.issuer_name,
+                    item.state,
+                    item.last_price_status,
+                    item.opportunity_score,
+                    item.notes,
+                ),
+            )
+
+    def watchlist(self) -> list[WatchlistItem]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM watchlist ORDER BY opportunity_score DESC"
+            ).fetchall()
+            return [self._watchlist_from_row(row) for row in rows]
+
+    def watchlist_by_ticker(self) -> dict[str, WatchlistItem]:
+        return {item.ticker: item for item in self.watchlist()}
+
     @staticmethod
     def _manager_from_row(row: sqlite3.Row) -> Manager:
         return Manager(
@@ -519,4 +575,18 @@ class Database:
             low=row["low"],
             close=row["close"],
             volume=row["volume"],
+        )
+
+    @staticmethod
+    def _watchlist_from_row(row: sqlite3.Row) -> WatchlistItem:
+        return WatchlistItem(
+            ticker=row["ticker"],
+            issuer_name=row["issuer_name"],
+            state=WatchlistState(row["state"]),
+            last_price_status=(
+                WatchlistState(row["last_price_status"]) if row["last_price_status"] else None
+            ),
+            opportunity_score=row["opportunity_score"],
+            notes=row["notes"],
+            updated_at=datetime.fromisoformat(row["updated_at"]) if row["updated_at"] else None,
         )

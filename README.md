@@ -86,6 +86,13 @@ Run validation backtests from stored signals and price history:
 .venv/bin/stockpicker backtest --group-by price_status
 ```
 
+Review operating alerts and persist the current research queue:
+
+```bash
+.venv/bin/stockpicker alerts --refresh-prices --save-watchlist
+.venv/bin/stockpicker watchlist
+```
+
 ## Current Build Phases
 
 - Phase 1: project scaffold, SQLite schema, SEC client, 13F parser.
@@ -96,6 +103,7 @@ Run validation backtests from stored signals and price history:
 - Phase 6: security master mapping and static dashboard export.
 - Phase 7: manager universe import and filing-season run orchestration.
 - Phase 8: grouped historical backtesting by signal, manager, ticker, and price zone.
+- Phase 9: watchlist persistence and operating alerts.
 
 ## Design Principles
 
