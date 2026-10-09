@@ -59,6 +59,12 @@ SEC_USER_AGENT="Your Name your.email@example.com" \
 .venv/bin/stockpicker beneficial-filings --ticker XYZ
 ```
 
+Start the local browser dashboard:
+
+```bash
+.venv/bin/stockpicker serve --port 8765
+```
+
 Generate signals and view opportunities:
 
 ```bash
@@ -137,6 +143,7 @@ Record portfolio plans and decisions:
 - Phase 9: watchlist persistence and operating alerts.
 - Phase 10: portfolio plan and decision journal.
 - Phase 11: 13D/13G ingestion pipeline and beneficial ownership signal persistence.
+- Phase 12: local web dashboard UI.
 
 ## Design Principles
 

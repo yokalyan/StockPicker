@@ -30,6 +30,7 @@ from stockpicker.pipeline import (
 from stockpicker.research import render_research_packet
 from stockpicker.sec import SecClient
 from stockpicker.security_master import load_security_mappings_csv
+from stockpicker.web import WebServer
 
 console = Console()
 
@@ -491,6 +492,17 @@ def dashboard(ctx: click.Context, out: str, refresh_prices: bool, limit: int) ->
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render_dashboard(ranked))
     console.print(f"[green]Wrote {path}[/green]")
+
+
+@app.command("serve")
+@click.option("--host", default="127.0.0.1")
+@click.option("--port", default=8765)
+@click.pass_context
+def serve(ctx: click.Context, host: str, port: int) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    console.print(f"[green]Serving StockPicker dashboard at http://{host}:{port}[/green]")
+    WebServer(host=host, port=port, db_path=str(db.path)).serve_forever()
 
 
 @app.command("backtest")

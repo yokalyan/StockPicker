@@ -67,6 +67,8 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
   conditions.
 - Record decision journal entries for watch, research, buy, add, trim, sell, reject, and
   hold actions.
+- Serve a local browser dashboard for opportunities, alerts, watchlist, portfolio plans,
+  decisions, and beneficial ownership filings.
 
 ### Validation
 
@@ -96,6 +98,7 @@ The system is explicitly not a trade recommender. It is an evidence funnel.
 9. Watchlist persistence and operating alerts.
 10. Portfolio plan and decision journal.
 11. 13D/13G ingestion pipeline and beneficial ownership signal persistence.
+12. Local web dashboard UI.
 
 ## Definition Of Done
 
