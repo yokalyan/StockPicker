@@ -16,6 +16,7 @@ small and mid-cap ideas worth underwriting.
 - Estimates cost-basis ranges from quarterly price and volume data.
 - Ranks opportunities by manager quality, signal strength, and price discipline.
 - Generates Markdown research packets with underwriting questions and a decision log.
+- Includes lightweight forward-return backtest primitives.
 
 ## Quick Start
 
@@ -61,6 +62,7 @@ Generate a research packet:
 - Phase 2: position-change signals, cost-basis estimation, opportunity scoring.
 - Phase 3: CLI workflow and research-packet generation.
 - Phase 4: 13D/13G beneficial ownership parser and activist signal conversion.
+- Phase 5: backtest primitives and requirements documentation.
 
 ## Design Principles
 
