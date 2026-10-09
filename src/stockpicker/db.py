@@ -13,7 +13,9 @@ from stockpicker.models import (
     DecisionJournalEntry,
     DecisionType,
     Filing,
+    FundamentalSnapshot,
     Holding,
+    LiquiditySnapshot,
     Manager,
     PortfolioPosition,
     PriceBar,
@@ -189,6 +191,32 @@ class Database:
                     price REAL,
                     signal_id INTEGER,
                     created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
+                CREATE TABLE IF NOT EXISTS liquidity_snapshots (
+                    ticker TEXT PRIMARY KEY,
+                    as_of TEXT NOT NULL,
+                    avg_volume_30d REAL,
+                    avg_dollar_volume_30d REAL,
+                    avg_volume_90d REAL,
+                    avg_dollar_volume_90d REAL,
+                    latest_close REAL,
+                    liquidity_label TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS fundamental_snapshots (
+                    ticker TEXT PRIMARY KEY,
+                    as_of TEXT NOT NULL,
+                    market_cap REAL,
+                    enterprise_value REAL,
+                    sector TEXT,
+                    industry TEXT,
+                    revenue REAL,
+                    net_income REAL,
+                    operating_income REAL,
+                    cash REAL,
+                    debt REAL,
+                    source TEXT NOT NULL
                 );
 
                 INSERT OR IGNORE INTO schema_meta(version, applied_at)
@@ -713,6 +741,88 @@ class Database:
             rows = conn.execute(query, params).fetchall()
             return [self._decision_from_row(row) for row in rows]
 
+    def upsert_liquidity_snapshot(self, snapshot: LiquiditySnapshot) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO liquidity_snapshots(
+                    ticker, as_of, avg_volume_30d, avg_dollar_volume_30d,
+                    avg_volume_90d, avg_dollar_volume_90d, latest_close, liquidity_label
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(ticker) DO UPDATE SET
+                    as_of=excluded.as_of,
+                    avg_volume_30d=excluded.avg_volume_30d,
+                    avg_dollar_volume_30d=excluded.avg_dollar_volume_30d,
+                    avg_volume_90d=excluded.avg_volume_90d,
+                    avg_dollar_volume_90d=excluded.avg_dollar_volume_90d,
+                    latest_close=excluded.latest_close,
+                    liquidity_label=excluded.liquidity_label
+                """,
+                (
+                    snapshot.ticker.upper(),
+                    snapshot.as_of,
+                    snapshot.avg_volume_30d,
+                    snapshot.avg_dollar_volume_30d,
+                    snapshot.avg_volume_90d,
+                    snapshot.avg_dollar_volume_90d,
+                    snapshot.latest_close,
+                    snapshot.liquidity_label,
+                ),
+            )
+
+    def liquidity_snapshot(self, ticker: str) -> LiquiditySnapshot | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM liquidity_snapshots WHERE ticker = ?", (ticker.upper(),)
+            ).fetchone()
+            return self._liquidity_snapshot_from_row(row) if row else None
+
+    def upsert_fundamental_snapshot(self, snapshot: FundamentalSnapshot) -> None:
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO fundamental_snapshots(
+                    ticker, as_of, market_cap, enterprise_value, sector, industry,
+                    revenue, net_income, operating_income, cash, debt, source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(ticker) DO UPDATE SET
+                    as_of=excluded.as_of,
+                    market_cap=excluded.market_cap,
+                    enterprise_value=excluded.enterprise_value,
+                    sector=excluded.sector,
+                    industry=excluded.industry,
+                    revenue=excluded.revenue,
+                    net_income=excluded.net_income,
+                    operating_income=excluded.operating_income,
+                    cash=excluded.cash,
+                    debt=excluded.debt,
+                    source=excluded.source
+                """,
+                (
+                    snapshot.ticker.upper(),
+                    snapshot.as_of,
+                    snapshot.market_cap,
+                    snapshot.enterprise_value,
+                    snapshot.sector,
+                    snapshot.industry,
+                    snapshot.revenue,
+                    snapshot.net_income,
+                    snapshot.operating_income,
+                    snapshot.cash,
+                    snapshot.debt,
+                    snapshot.source,
+                ),
+            )
+
+    def fundamental_snapshot(self, ticker: str) -> FundamentalSnapshot | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM fundamental_snapshots WHERE ticker = ?", (ticker.upper(),)
+            ).fetchone()
+            return self._fundamental_snapshot_from_row(row) if row else None
+
     @staticmethod
     def _manager_from_row(row: sqlite3.Row) -> Manager:
         return Manager(
@@ -833,4 +943,34 @@ class Database:
             price_high=row["price_high"],
             purpose=row["purpose"],
             document_url=row["document_url"],
+        )
+
+    @staticmethod
+    def _liquidity_snapshot_from_row(row: sqlite3.Row) -> LiquiditySnapshot:
+        return LiquiditySnapshot(
+            ticker=row["ticker"],
+            as_of=date.fromisoformat(row["as_of"]),
+            avg_volume_30d=row["avg_volume_30d"],
+            avg_dollar_volume_30d=row["avg_dollar_volume_30d"],
+            avg_volume_90d=row["avg_volume_90d"],
+            avg_dollar_volume_90d=row["avg_dollar_volume_90d"],
+            latest_close=row["latest_close"],
+            liquidity_label=row["liquidity_label"],
+        )
+
+    @staticmethod
+    def _fundamental_snapshot_from_row(row: sqlite3.Row) -> FundamentalSnapshot:
+        return FundamentalSnapshot(
+            ticker=row["ticker"],
+            as_of=date.fromisoformat(row["as_of"]),
+            market_cap=row["market_cap"],
+            enterprise_value=row["enterprise_value"],
+            sector=row["sector"],
+            industry=row["industry"],
+            revenue=row["revenue"],
+            net_income=row["net_income"],
+            operating_income=row["operating_income"],
+            cash=row["cash"],
+            debt=row["debt"],
+            source=row["source"],
         )

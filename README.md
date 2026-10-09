@@ -16,8 +16,10 @@ small and mid-cap ideas worth underwriting.
 - Estimates cost-basis ranges from quarterly price and volume data.
 - Ranks opportunities by manager quality, signal strength, and price discipline.
 - Adds explicit crowding/overlap metadata to opportunity scoring.
+- Enriches tickers with free price, liquidity, and fundamentals data from yfinance and
+  SEC company facts.
 - Generates Markdown research packets with underwriting questions and a decision log.
-- Includes lightweight forward-return backtest primitives.
+- Includes lightweight forward-return and benchmark-relative backtest primitives.
 - Imports a CUSIP-to-ticker security master and exports a static HTML dashboard.
 
 ## Quick Start
@@ -83,6 +85,8 @@ SEC_USER_AGENT="Your Name your.email@example.com" \
 Generate a research packet:
 
 ```bash
+SEC_USER_AGENT="Your Name your.email@example.com" \
+.venv/bin/stockpicker enrich --ticker XYZ --sec-cik 0000000000
 .venv/bin/stockpicker research-packet --ticker XYZ --out research
 ```
 
@@ -100,6 +104,7 @@ Run validation backtests from stored signals and price history:
 .venv/bin/stockpicker backtest --group-by signal_type --holding-days 180
 .venv/bin/stockpicker backtest --group-by manager --holding-days 365
 .venv/bin/stockpicker backtest --group-by price_status
+.venv/bin/stockpicker backtest --benchmark SPY --excess --refresh-prices
 ```
 
 Review operating alerts and persist the current research queue:
@@ -146,6 +151,8 @@ Record portfolio plans and decisions:
 - Phase 11: 13D/13G ingestion pipeline and beneficial ownership signal persistence.
 - Phase 12: local web dashboard UI.
 - Phase 13: initial draft audit, crowding analysis, and richer research packets.
+- Phase 14: free data enrichment with yfinance, SEC company facts, liquidity snapshots,
+  and SPY-relative excess-return backtests.
 
 ## Design Principles
 

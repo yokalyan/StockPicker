@@ -24,17 +24,21 @@ This document maps the original StockPicker product draft to the implementation.
   persisted watchlist states.
 - Backtesting: forward returns grouped by signal type, manager, ticker, and price-zone
   status across configurable holding periods.
+- Benchmark-relative backtests: optional benchmark price history, including SPY, and
+  grouped excess-return summaries.
+- Free market data enrichment: yfinance price/fundamental snapshots, SEC company facts
+  fundamentals, and 30d/90d average dollar-volume liquidity labels.
 - Portfolio tracking: position plans, thesis status, entry/add/trim/exit conditions, and
   decision journal.
 - UI: CLI, static dashboard export, and local browser dashboard.
 
 ## Partially Covered
 
-- Market cap, sector, valuation, short interest, insider trading, and liquidity currently
-  exist as research-packet placeholders. They are intentionally not automated yet because
-  that requires a trusted fundamentals/market-data provider.
-- Benchmark and sector-relative backtests are not yet implemented; current backtests are
-  absolute forward returns.
+- Market cap, sector, high-level fundamentals, and liquidity can now be populated from
+  free sources. Valuation multiples, short interest, insider trading, and sector-relative
+  analysis still need a dependable source or explicit import path.
+- Sector-relative backtests are not yet implemented; current relative backtests compare
+  against a user-selected benchmark such as SPY.
 - 13G-to-13D conversion detection is not explicit yet. The raw filings and signal types
   are persisted, so a conversion detector can be added on top.
 - Historical manager signal quality is available through grouped backtests, but manager

@@ -32,6 +32,8 @@ class BacktestObservation:
     signal_date: date
     holding_days: int
     forward_return: float
+    benchmark_return: float | None = None
+    excess_return: float | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +107,7 @@ def build_backtest_observations(
     managers: list[Manager],
     prices_by_ticker: dict[str, list[PriceBar]],
     cost_estimates: list[CostBasisEstimate] | None = None,
+    benchmark_prices: list[PriceBar] | None = None,
     holding_days: int = 180,
 ) -> list[BacktestObservation]:
     managers_by_id = {manager.id: manager for manager in managers if manager.id is not None}
@@ -121,6 +124,15 @@ def build_backtest_observations(
         )
         if result is None:
             continue
+        benchmark_return = (
+            forward_return(
+                prices=benchmark_prices,
+                signal_date=signal.report_period,
+                holding_days=holding_days,
+            )
+            if benchmark_prices
+            else None
+        )
         manager = managers_by_id.get(signal.manager_id)
         estimate = cost_by_key.get((signal.manager_id, signal.ticker, signal.report_period))
         observations.append(
@@ -133,18 +145,27 @@ def build_backtest_observations(
                 signal_date=signal.report_period,
                 holding_days=holding_days,
                 forward_return=result,
+                benchmark_return=benchmark_return,
+                excess_return=(
+                    result - benchmark_return if benchmark_return is not None else None
+                ),
             )
         )
     return observations
 
 
 def summarize_observations(
-    observations: list[BacktestObservation], group_by: str = "signal_type"
+    observations: list[BacktestObservation],
+    group_by: str = "signal_type",
+    return_field: str = "forward_return",
 ) -> list[GroupedBacktestResult]:
     grouped: dict[str, list[float]] = {}
     for observation in observations:
+        value = getattr(observation, return_field)
+        if value is None:
+            continue
         group = _group_value(observation, group_by)
-        grouped.setdefault(group, []).append(observation.forward_return)
+        grouped.setdefault(group, []).append(value)
 
     summaries = [
         GroupedBacktestResult(

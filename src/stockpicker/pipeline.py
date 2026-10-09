@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from stockpicker.beneficial import beneficial_filing_to_signal, parse_beneficial_ownership_filing
 from stockpicker.db import Database
+from stockpicker.fundamentals import (
+    fetch_sec_company_facts,
+    fetch_yfinance_snapshot,
+    merge_fundamentals,
+    sec_snapshot_from_company_facts,
+)
+from stockpicker.liquidity import calculate_liquidity_snapshot
 from stockpicker.models import Filing, FilingType, Manager, Signal
 from stockpicker.prices import estimate_cost_basis, fetch_price_bars, quarter_window
 from stockpicker.sec import SecClient, load_ticker_map, parse_13f_information_table
@@ -221,3 +228,33 @@ def build_cost_estimates_for_signals(
         if estimate:
             estimates.append(estimate)
     return estimates
+
+
+def enrich_ticker_free_data(
+    *,
+    db: Database,
+    ticker: str,
+    sec_cik: str | None = None,
+    sec_user_agent: str | None = None,
+) -> None:
+    ticker = ticker.upper()
+    end = date.today()
+    start = end - timedelta(days=370)
+    try:
+        bars = fetch_price_bars(ticker, start, end)
+    except Exception:
+        bars = []
+    if bars:
+        db.upsert_prices(bars)
+    db.upsert_liquidity_snapshot(calculate_liquidity_snapshot(ticker, bars))
+
+    snapshot = fetch_yfinance_snapshot(ticker)
+    if sec_cik and sec_user_agent:
+        try:
+            facts = fetch_sec_company_facts(sec_cik, sec_user_agent)
+        except Exception:
+            facts = {}
+        if facts:
+            sec_snapshot = sec_snapshot_from_company_facts(ticker=ticker, facts=facts)
+            snapshot = merge_fundamentals(snapshot, sec_snapshot)
+    db.upsert_fundamental_snapshot(snapshot)

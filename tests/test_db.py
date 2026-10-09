@@ -6,7 +6,9 @@ from stockpicker.models import (
     DecisionJournalEntry,
     DecisionType,
     Filing,
+    FundamentalSnapshot,
     Holding,
+    LiquiditySnapshot,
     Manager,
     PortfolioPosition,
     PriceBar,
@@ -174,3 +176,42 @@ def test_database_persists_beneficial_ownership_filings(tmp_path):
     assert filing_id > 0
     assert filings[0].ticker == "ACME"
     assert filings[0].ownership_pct == 7.4
+
+
+def test_database_persists_free_data_snapshots(tmp_path):
+    db = Database(tmp_path / "stockpicker.sqlite")
+    db.init()
+    db.upsert_liquidity_snapshot(
+        LiquiditySnapshot(
+            ticker="acme",
+            as_of=date(2026, 10, 9),
+            avg_volume_30d=100_000,
+            avg_dollar_volume_30d=2_500_000,
+            avg_volume_90d=90_000,
+            avg_dollar_volume_90d=2_250_000,
+            latest_close=25,
+            liquidity_label="low",
+        )
+    )
+    db.upsert_fundamental_snapshot(
+        FundamentalSnapshot(
+            ticker="acme",
+            as_of=date(2026, 10, 9),
+            market_cap=1_000_000_000,
+            enterprise_value=1_100_000_000,
+            sector="Industrials",
+            revenue=500_000_000,
+            net_income=50_000_000,
+            source="yfinance+sec_companyfacts",
+        )
+    )
+
+    liquidity = db.liquidity_snapshot("ACME")
+    fundamental = db.fundamental_snapshot("ACME")
+
+    assert liquidity is not None
+    assert liquidity.ticker == "ACME"
+    assert liquidity.liquidity_label == "low"
+    assert fundamental is not None
+    assert fundamental.source == "yfinance+sec_companyfacts"
+    assert fundamental.market_cap == 1_000_000_000

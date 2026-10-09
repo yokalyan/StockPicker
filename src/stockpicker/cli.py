@@ -22,6 +22,7 @@ from stockpicker.models import (
 from stockpicker.opportunities import rank_opportunities
 from stockpicker.pipeline import (
     build_cost_estimates_for_signals,
+    enrich_ticker_free_data,
     generate_manager_signals,
     ingest_13f_filings,
     ingest_beneficial_ownership_filings,
@@ -512,26 +513,51 @@ def serve(ctx: click.Context, host: str, port: int) -> None:
     default="signal_type",
 )
 @click.option("--holding-days", default=180)
+@click.option("--benchmark", default=None)
+@click.option("--excess", is_flag=True, help="Show excess returns versus benchmark.")
 @click.option("--refresh-prices", is_flag=True)
 @click.pass_context
 def backtest(
-    ctx: click.Context, group_by: str, holding_days: int, refresh_prices: bool
+    ctx: click.Context,
+    group_by: str,
+    holding_days: int,
+    benchmark: str | None,
+    excess: bool,
+    refresh_prices: bool,
 ) -> None:
     db: Database = ctx.obj["db"]
+    if excess and not benchmark:
+        raise click.ClickException("--excess requires --benchmark, for example --benchmark SPY.")
     signals = db.signals()
     estimates = build_cost_estimates_for_signals(
         db=db, signals=signals, refresh_prices=refresh_prices
     )
     prices_by_ticker = db.all_prices_for_tickers(signal.ticker for signal in signals)
+    benchmark_prices = None
+    if benchmark:
+        if refresh_prices:
+            from datetime import date, timedelta
+
+            from stockpicker.prices import fetch_price_bars
+
+            bars = fetch_price_bars(benchmark, date.today() - timedelta(days=3650), date.today())
+            db.upsert_prices(bars)
+        benchmark_prices = db.all_prices_for_tickers([benchmark]).get(benchmark.upper())
     observations = build_backtest_observations(
         signals=signals,
         managers=db.managers(),
         prices_by_ticker=prices_by_ticker,
         cost_estimates=estimates,
+        benchmark_prices=benchmark_prices,
         holding_days=holding_days,
     )
-    summaries = summarize_observations(observations, group_by=group_by)
-    table = Table(title=f"Backtest by {group_by.replace('_', ' ')}")
+    summaries = summarize_observations(
+        observations,
+        group_by=group_by,
+        return_field="excess_return" if excess else "forward_return",
+    )
+    suffix = f" excess vs {benchmark.upper()}" if excess and benchmark else ""
+    table = Table(title=f"Backtest by {group_by.replace('_', ' ')}{suffix}")
     for column in ["Group", "N", "Hit Rate", "Avg", "Median", "Best", "Worst"]:
         table.add_column(column)
     for item in summaries:
@@ -545,6 +571,23 @@ def backtest(
             f"{item.worst_return:.1%}",
         )
     console.print(table)
+
+
+@app.command("enrich")
+@click.option("--ticker", required=True)
+@click.option("--sec-cik", default=None)
+@click.option("--user-agent", envvar="SEC_USER_AGENT", default=None)
+@click.pass_context
+def enrich(ctx: click.Context, ticker: str, sec_cik: str | None, user_agent: str | None) -> None:
+    db: Database = ctx.obj["db"]
+    db.init()
+    enrich_ticker_free_data(
+        db=db,
+        ticker=ticker,
+        sec_cik=sec_cik,
+        sec_user_agent=user_agent,
+    )
+    console.print(f"[green]Enriched {ticker.upper()} with free market/fundamental data.[/green]")
 
 
 @app.command("research-packet")
@@ -562,7 +605,15 @@ def research_packet(ctx: click.Context, ticker: str, out: str) -> None:
     output_dir = Path(out)
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{ticker.upper()}_research_packet.md"
-    path.write_text(render_research_packet(opportunity, signals, estimates))
+    path.write_text(
+        render_research_packet(
+            opportunity,
+            signals,
+            estimates,
+            fundamental=db.fundamental_snapshot(ticker),
+            liquidity=db.liquidity_snapshot(ticker),
+        )
+    )
     console.print(f"[green]Wrote {path}[/green]")
 
 

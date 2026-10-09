@@ -1,8 +1,12 @@
 from datetime import date
 
 from stockpicker.db import Database
-from stockpicker.models import Filing, Holding, Manager, StrategyType
-from stockpicker.pipeline import ingest_beneficial_ownership_filings, run_filing_season
+from stockpicker.models import Filing, FundamentalSnapshot, Holding, Manager, StrategyType
+from stockpicker.pipeline import (
+    enrich_ticker_free_data,
+    ingest_beneficial_ownership_filings,
+    run_filing_season,
+)
 
 
 class FakeSecClient:
@@ -110,3 +114,34 @@ def test_ingest_beneficial_ownership_filings_creates_filing_and_signal(tmp_path)
     assert result.signal_count == 1
     assert db.beneficial_ownership_filings("ACME")[0].ownership_pct == 7.4
     assert db.signals()[0].ticker == "ACME"
+
+
+def test_enrich_ticker_free_data_persists_unknown_liquidity_when_prices_fail(
+    tmp_path, monkeypatch
+):
+    db = Database(tmp_path / "stockpicker.sqlite")
+    db.init()
+
+    def fail_price_fetch(*args, **kwargs):
+        raise RuntimeError("provider unavailable")
+
+    def fake_snapshot(ticker):
+        return FundamentalSnapshot(
+            ticker=ticker,
+            as_of=date(2026, 10, 9),
+            sector="Industrials",
+            source="yfinance",
+        )
+
+    monkeypatch.setattr("stockpicker.pipeline.fetch_price_bars", fail_price_fetch)
+    monkeypatch.setattr("stockpicker.pipeline.fetch_yfinance_snapshot", fake_snapshot)
+
+    enrich_ticker_free_data(db=db, ticker="acme")
+
+    liquidity = db.liquidity_snapshot("ACME")
+    fundamental = db.fundamental_snapshot("ACME")
+
+    assert liquidity is not None
+    assert liquidity.liquidity_label == "unknown"
+    assert fundamental is not None
+    assert fundamental.sector == "Industrials"

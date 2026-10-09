@@ -109,3 +109,39 @@ def test_backtest_observations_include_manager_and_price_status():
 
     assert by_manager[0].group == "Patient Capital"
     assert by_price[0].group == "inside_buy_zone"
+
+
+def test_backtest_observations_include_benchmark_and_excess_return():
+    signal = Signal(
+        manager_id=1,
+        ticker="AAA",
+        issuer_name="AAA Corp",
+        signal_type=SignalType.NEW_POSITION,
+        report_period=date(2026, 1, 1),
+        current_shares=100,
+        prior_shares=0,
+        share_change=100,
+        pct_change=None,
+        current_weight=0.1,
+        prior_weight=None,
+    )
+
+    observations = build_backtest_observations(
+        signals=[signal],
+        managers=[Manager(id=1, name="Patient Capital", cik="1")],
+        prices_by_ticker={
+            "AAA": [bar("AAA", date(2026, 1, 2), 10), bar("AAA", date(2026, 7, 1), 13)]
+        },
+        benchmark_prices=[
+            bar("SPY", date(2026, 1, 2), 100),
+            bar("SPY", date(2026, 7, 1), 110),
+        ],
+    )
+
+    assert observations[0].forward_return == 0.3
+    assert observations[0].benchmark_return == 0.1
+    assert round(observations[0].excess_return or 0, 6) == 0.2
+
+    summaries = summarize_observations(observations, return_field="excess_return")
+
+    assert round(summaries[0].average_return, 6) == 0.2

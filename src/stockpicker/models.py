@@ -159,6 +159,32 @@ class PriceBar(BaseModel):
     volume: int
 
 
+class LiquiditySnapshot(BaseModel):
+    ticker: str
+    as_of: date
+    avg_volume_30d: float | None = None
+    avg_dollar_volume_30d: float | None = None
+    avg_volume_90d: float | None = None
+    avg_dollar_volume_90d: float | None = None
+    latest_close: float | None = None
+    liquidity_label: str = "unknown"
+
+
+class FundamentalSnapshot(BaseModel):
+    ticker: str
+    as_of: date
+    market_cap: float | None = None
+    enterprise_value: float | None = None
+    sector: str | None = None
+    industry: str | None = None
+    revenue: float | None = None
+    net_income: float | None = None
+    operating_income: float | None = None
+    cash: float | None = None
+    debt: float | None = None
+    source: str = "free"
+
+
 class CostBasisEstimate(BaseModel):
     ticker: str
     manager_id: int
